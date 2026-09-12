@@ -1,0 +1,30 @@
+{
+  "0x39": {
+    "name": "Adafruit APDS9960",
+    "kind": "proximity",
+    "voltage": "3.3V",
+    "interface": "STEMMA QT",
+    "reading": "proximity"
+  },
+  "0x36": {
+    "name": "Adafruit rotary encoder",
+    "kind": "encoder",
+    "voltage": "3.3V",
+    "interface": "STEMMA QT",
+    "reading": "position"
+  },
+  "0x6f": {
+    "name": "SparkFun Qwiic Button",
+    "kind": "button",
+    "voltage": "3.3V",
+    "interface": "Qwiic",
+    "reading": "pressed"
+  },
+  "0x6e": {
+    "name": "SparkFun Qwiic Button",
+    "kind": "button",
+    "voltage": "3.3V",
+    "interface": "Qwiic",
+    "reading": "pressed"
+  }
+}

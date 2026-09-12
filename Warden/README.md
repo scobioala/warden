@@ -1,52 +1,71 @@
-# Warden · embodied AI tutor
+# Warden
 
-Warden is a general workbench companion for the Raspberry Pi 5 and a known low-voltage Qwiic kit. It listens to spoken questions, inspects an explicitly captured browser camera frame, guides one physical action at a time, and confirms state through a Pi bridge. The APDS9960 sequence is a demo lesson—not the product’s only workflow. It deliberately never gives mains-power or unverified wiring advice.
+Hardware bring-up for a Raspberry Pi and known 3.3V Qwiic / STEMMA QT devices. The camera is a hint. The bus is the truth.
 
-## Run the demo (no Pi required)
+## Start the web app and agent
 
-```bash
-cd Warden
+Requires Node 22. From `Warden/`:
+
+```sh
 npm install
+cp agent/.env.example agent/.env
+# Set ANTHROPIC_API_KEY in agent/.env; optionally configure ElevenLabs.
+npm run agent
+```
+
+In a second terminal:
+
+```sh
 npm run dev
 ```
 
-Open the printed local URL. Click **Run demo** for a deterministic one-click walkthrough, or use **Start guided setup**. Camera access is optional; when recognition is uncertain, the interface asks the learner to adjust the view instead of claiming a detection.
+Open http://localhost:5174. The landing page leads to installation, pairing, optional camera permission, then the workbench. It can be explored offline; it never invents a connected device. A missing provider key is reported explicitly. `npm run build` creates `dist/`. The production web host must proxy `/api` (including SSE and device WebSocket upgrades) to the agent. Use HTTPS/WSS outside a trusted local network. The development proxy handles browser requests automatically.
 
-## Pi bridge
+## Connect the Pi
 
-On the Raspberry Pi, with the supported I²C/Qwiic hardware connected:
+Use Raspberry Pi OS, Python 3.10+, and enable I²C in `sudo raspi-config`. Install the OS prerequisites:
 
-```bash
-cd Warden/bridge
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8787
+```sh
+sudo apt-get install -y git python3-venv python3-dev i2c-tools libgpiod-dev
 ```
 
-The bridge serves `GET /health`, `GET /status`, a status WebSocket at `/ws`, and mock demo hooks at `POST /demo/connect`, `/demo/wave`, and `/demo/confirm`. `WARDEN_MODE=mock` is the default. The real-hardware adapter is intentionally isolated in `bridge/main.py`; add CircuitPython/Blinka initialization there for the APDS9960, Qwiic Button, rotary encoder, and PiTFT.
+Your Pi user needs access to `/dev/i2c-1` (normally membership in the `i2c` group). Copy the current checkout to the Pi; the public repository clone will include these changes only after they have been committed and pushed. From the Pi's `Warden/` directory:
 
-Environment variables: `WARDEN_MODE=mock|real`, `WARDEN_WEB_ORIGIN=http://localhost:5173`, `VITE_WARDEN_BRIDGE_URL=http://<pi>:8787`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and optional `ANTHROPIC_MODEL`. See `bridge/.env.example`; do not commit a populated `.env` file.
-
-### Astra, voice, and vision
-
-Set `OPENAI_API_KEY` on the bridge to activate Astra via the Responses API using `gpt-6-astra`. If that key is absent or Astra fails, Warden uses `ANTHROPIC_API_KEY` with Claude Sonnet 4.6; both providers can reason over the user-triggered JPEG camera frame and the live Pi state. When neither works, Warden clearly labels and uses its deterministic safe fallback rather than pretending it performed vision or reasoning. Browser speech recognition transcribes the learner’s question; browser text-to-speech speaks Warden’s response. Microphone and camera permissions are requested only after the learner presses the relevant control.
-
-## Architecture
-
-```text
-Browser camera + voice/text UI  →  React workbench experience
-                                       ↕ HTTP / WebSocket
-                              Python Pi bridge → I²C devices / PiTFT
+```sh
+python3 -m venv device/.venv
+device/.venv/bin/pip install -r device/requirements.txt
+device/.venv/bin/python device/main.py pair YOUR-CODE --agent http://YOUR-COMPUTER-LAN-IP:8788
 ```
 
-The browser owns camera permissions and spoken prompts (with an accessible text-control fallback). The Pi owns I²C truth. Mock mode preserves that exact event model so a demo never depends on physical hardware.
+Use the six-character code displayed in setup. Codes expire after 15 minutes; clear an expired code and generate a new one. The process stays in the foreground, opens an outbound WebSocket to the agent, and serves local FastAPI health at `127.0.0.1:8787/health`. After a disconnect, rerun pairing; after expiry, generate a fresh browser session. No hosted installer is claimed. The UI provides manual commands because no working installer URL exists.
 
-## 90-second demo script
+## Architecture and evidence
 
-1. Open Warden: “What are we building today?” establishes a camera-aware workbench rather than a chat window.
-2. Say “Warden, help me connect my first sensor,” or press **Start guided setup**.
-3. Warden asks to see the APDS9960 and Qwiic cable, then gives one safe, keyed low-voltage connection action.
-4. Press **I made the connection**. The console discovers `0x39`, the PiTFT changes to **VERIFIED**, and the button LED reports green.
-5. Warden says: “Verified. You connected your first I²C sensor.”
-6. Continue: a wave gesture advances the lesson; the encoder and Qwiic button select and confirm the next lesson.
-7. For a reliable stage run, press **Run demo** and let the full sequence play itself.
+- `web/`: Vite, React, TypeScript. Browser only contacts `/api` on the agent (except font assets).
+- `agent/`: Node, Claude Sonnet tool loop, in-memory pairing, raw SSE tool events, server-side ElevenLabs TTS and single-frame camera analysis.
+- `device/`: Python FastAPI + outbound WebSocket, fixed allowlisted operations, real `i2cdetect` output and I²C reads.
+- `agent/parts.json`: supported APDS9960 at `0x39`, Adafruit seesaw encoder at `0x36`, SparkFun Qwiic Buttons at `0x6f` / `0x6e`.
+
+No mock mode. No simulated sensor data. No arbitrary code execution. `i2cdetect` is invoked with a fixed argument list and no shell. Unknown addresses are shown as PRESENT; only successful supported reads yield VERIFIED. A scan failure, empty bus, and offline device are distinct states. A disconnected device clears the live cards. Button events require release followed by a new press; a held button is not accepted as a new action. LED writes and address changes read back the register. Camera confidence cannot update hardware verification.
+
+The landing SVG is explicitly labeled an illustrative sequence, not a live bus. There is no recorded 90-second demo yet, so its secondary link goes to the process explanation. Device polling is independent of the conversation every three seconds. Tool arguments and raw results are visible. Voice is opt-in and falls back to browser speech synthesis. Camera permission is only requested after enabling the toggle; Analyze frame submits a single downsized JPEG.
+
+## Configuration
+
+All keys belong in `agent/.env`, never in browser variables. `ANTHROPIC_MODEL` is optional (defaults to `claude-sonnet-4-6`). Set `ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` for TTS. The Pi accepts `WARDEN_AGENT_URL` or `--agent`; `WARDEN_I2C_BUS` defaults to `1` for scans/buttons. Adafruit drivers use the Pi's default hardware I²C bus. Sessions and conversation history are in memory and reset with the agent process. This is a local hackathon service, not a public multi-tenant deployment.
+
+Button registers follow SparkFun's published driver: https://github.com/sparkfun/Qwiic_Button_Py/blob/main/qwiic_button.py. Physical address collisions cannot be counted by I²C; the agent must ask the user to disconnect one board before changing the other board's address.
+
+## Validation
+
+```sh
+npm run build
+npm test
+python3 -m py_compile device/main.py
+```
+
+The integration test checks unauthenticated access, real offline state, provider configuration failures, invalid input, and invalid device pairing. Physical device operation, provider responses, microphone, and camera need the corresponding hardware, keys, and permissions; these are not represented as tested by the offline suite.
+
+## Provenance
+
+Pre-existing scaffolding: the original `src/main.tsx`, `src/styles.css`, Vite configuration, and `bridge/main.py` contained a simulated guided demo. This implementation replaces those active entry points with `web/`, `agent/`, and `device/`, built for the supplied design brief on September 12, 2026. The original mock bridge and frontend have been removed; Git history retains them. No API keys are included.
