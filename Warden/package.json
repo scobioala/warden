@@ -1,10 +1,13 @@
 {
   "name": "warden-workbench",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "description": "Warden is an agentic hardware debugger for real-world engineering work.",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:host": "vite --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
