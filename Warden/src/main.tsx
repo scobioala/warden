@@ -2,22 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Conversation, type VoiceConversation } from "@elevenlabs/client";
 import {
-  Activity,
-  ArrowRight,
   Camera,
   Check,
   ChevronRight,
-  CircleDot,
-  Command,
   Eye,
   Mic,
   Play,
-  Power,
-  RotateCw,
   ShieldCheck,
   Sparkles,
-  Send,
-  Waves,
 } from "lucide-react";
 import "./styles.css";
 import "./companion.css";
@@ -169,36 +161,6 @@ function App() {
       setAnswer(
         "Camera access was not approved. Ask me again when you are ready to show the hardware.",
       );
-    }
-  };
-  const start = () => {
-    setStage("show");
-    say("Show me the APDS 9960 sensor and a Qwiic cable.");
-  };
-  const next = () => {
-    if (stage === "show") {
-      setStage("connect");
-      say(
-        "Connect the Qwiic cable from your Pi chain to the APDS 9960. It is low voltage and keyed; never force the connector.",
-      );
-    } else if (stage === "connect") {
-      setStage("verify");
-      setHardware({
-        ...hardware,
-        connected: true,
-        i2c: [...hardware.i2c, "0x39 · APDS9960"],
-        button: true,
-        pitft: "VERIFIED",
-      });
-      say("Verified. You connected your first I2C sensor.");
-    } else if (stage === "verify") {
-      setStage("gesture");
-      setHardware((h) => ({ ...h, gesture: "up" }));
-      say("Wave over the sensor to advance.");
-    } else if (stage === "gesture") {
-      setStage("complete");
-      setHardware((h) => ({ ...h, encoder: 1, button: true, gesture: "down" }));
-      say("Lesson one selected. Press the Qwiic button to confirm.");
     }
   };
   const demo = async () => {
@@ -766,120 +728,6 @@ function ConnectionCompanion({ plan }: { plan: CompanionPlan }) {
         </aside>
       </div>
     </section>
-  );
-}
-function Progress({ stage }: { stage: Stage }) {
-  const current = ["show", "connect", "verify", "gesture", "complete"].indexOf(
-    stage,
-  );
-  const steps = [
-    { label: "Show", icon: <Camera size={14} /> },
-    { label: "Connect", icon: <Waves size={14} /> },
-    { label: "Verify", icon: <ShieldCheck size={14} /> },
-    { label: "Gesture", icon: <Activity size={14} /> },
-    { label: "Choose", icon: <RotateCw size={14} /> },
-  ];
-  return (
-    <div className="progress">
-      <div className="section-title">
-        <span>GUIDED PATH</span>
-        <small>{Math.max(0, current + 1)} / 5</small>
-      </div>
-      {steps.map((item, i) => (
-        <div
-          className={"step " + (i <= current ? "done" : "")}
-          key={item.label}
-        >
-          <span>{i < current ? <Check size={13} /> : item.icon}</span>
-          <small>{item.label}</small>
-        </div>
-      ))}
-    </div>
-  );
-}
-function HardwareConsole({
-  hardware,
-  verified,
-}: {
-  hardware: Hardware;
-  verified: boolean;
-}) {
-  return (
-    <div className="console">
-      <div className="section-title">
-        <span>
-          <Command size={14} /> LIVE HARDWARE CONSOLE
-        </span>
-        <small className="mock">MOCK MODE</small>
-      </div>
-      <div className="devices">
-        <Device name="Pi bridge" value="ONLINE" ok />
-        <Device
-          name="I²C bus"
-          value={verified ? "4 DEVICES" : "SCANNING"}
-          ok={verified}
-        />
-        <Device
-          name="Qwiic button"
-          value={hardware.button ? "LED GREEN" : "READY"}
-          ok={hardware.button}
-        />
-        <Device
-          name="APDS9960"
-          value={
-            hardware.connected
-              ? `0x39 · ${hardware.gesture.toUpperCase()}`
-              : "AWAITING"
-          }
-          ok={hardware.connected}
-        />
-      </div>
-      <div className="address-row">
-        {hardware.i2c.map((d) => (
-          <span key={d}>{d}</span>
-        ))}
-      </div>
-    </div>
-  );
-}
-function Device({
-  name,
-  value,
-  ok,
-}: {
-  name: string;
-  value: string;
-  ok?: boolean;
-}) {
-  return (
-    <div className="device">
-      <small>{name}</small>
-      <b className={ok ? "ok" : ""}>
-        {ok && <Check size={12} />} {value}
-      </b>
-    </div>
-  );
-}
-function PiTft({ verified, text }: { verified: boolean; text: string }) {
-  return (
-    <div className={"pitft " + (verified ? "bright" : "")}>
-      <div className="tft-head">
-        <span>MINI PiTFT</span>
-        <Power size={12} />
-      </div>
-      <div className="screen">
-        <div className="screen-orb">
-          {verified ? <Check size={23} /> : <CircleDot size={23} />}
-        </div>
-        <b>{text}</b>
-        <small>{verified ? "I²C · 0x39" : "READY TO GUIDE"}</small>
-      </div>
-      <div className="tft-foot">
-        <span />
-        <span />
-        <span />
-      </div>
-    </div>
   );
 }
 export default App;
