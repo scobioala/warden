@@ -3,3 +3,7 @@
 .env.*
 !.env.example
 bridge/.env
+node_modules/
+dist/
+__pycache__/
+bridge/__pycache__/
