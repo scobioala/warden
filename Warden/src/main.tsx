@@ -533,32 +533,6 @@ function App() {
     },
     [],
   );
-  const copy = {
-    home: [
-      "What are we building today?",
-      "Your workbench is quiet. Warden is ready when you are.",
-    ],
-    show: [
-      "Show Warden the pieces.",
-      "Hold the APDS9960 sensor and a Qwiic cable in the camera frame.",
-    ],
-    connect: [
-      "Make one safe connection.",
-      "Connect a Qwiic cable from your Pi chain to the APDS9960. The connector is keyed—never force it.",
-    ],
-    verify: [
-      "Connection confirmed.",
-      "Warden found your sensor on the I²C bus and notified the workbench.",
-    ],
-    gesture: [
-      "Try a gesture.",
-      "Wave over the APDS9960 to continue to your next lesson.",
-    ],
-    complete: [
-      "First sensor: complete.",
-      "Turn the encoder to choose a lesson, then press the Qwiic button to confirm.",
-    ],
-  }[stage];
   return (
     <main>
       <header>
@@ -624,11 +598,6 @@ function App() {
         <CameraFrame active={camera} video={video} inspect={inspectView} />
       </section>
       <ConnectionCompanion plan={companionPlan} />
-      <section className="lower">
-        <Progress stage={stage} />
-        <HardwareConsole hardware={hardware} verified={isVerified} />
-        <PiTft verified={isVerified} text={hardware.pitft} />
-      </section>
       {isVerified && (
         <div className="verified-toast">
           <Check size={18} />
