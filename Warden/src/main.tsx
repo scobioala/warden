@@ -8,6 +8,7 @@ import './live-draw.css'
 import './context-aware.css'
 import './action-items.css'
 import './clean-camera.css'
+import './architecture.css'
 
 type Stage = 'home' | 'show' | 'connect' | 'verify' | 'gesture' | 'complete'
 type Hardware = { connected: boolean; i2c: string[]; button: boolean; encoder: number; gesture: string; pitft: string }
