@@ -71,12 +71,7 @@ function Board() {
   return (
     <div className="instrument">
       <div className="instrument-top">
-        <span>
-          <span className="tiny-square" /> BUS INSPECTOR
-        </span>
-        <span>
-          ILLUSTRATIVE SEQUENCE <span className="slash">/</span> 01
-        </span>
+        <span>ILLUSTRATIVE SEQUENCE</span>
       </div>
       <svg
         viewBox="0 0 600 335"
@@ -241,10 +236,6 @@ function Board() {
           <span className="terminal-caret" />
         </div>
       </div>
-      <div className="instrument-bottom">
-        <span>PHYSICAL WORLD → RAW EVIDENCE</span>
-        <span>I²C / 3.3V</span>
-      </div>
     </div>
   );
 }
@@ -260,7 +251,7 @@ function Landing({ start }: { start: () => void }) {
       <section className="hero">
         <div className="hero-copy">
           <div className="eyebrow">
-            <span /> AGENTIC HARDWARE BRING-UP
+            <span /> AGENTIC HARDWARE DEBUGGER
           </div>
           <h1>
             It can’t see
@@ -270,8 +261,7 @@ function Landing({ start }: { start: () => void }) {
             <span>So it checks.</span>
           </h1>
           <p>
-            One wiring instruction at a time. Then a real read of the I²C bus to
-            confirm you did it. No guesswork.
+            Your agent verifying hardware connections in real time. No guesswork.
           </p>
           <div className="hero-actions">
             <button className="primary" onClick={start}>
@@ -281,19 +271,10 @@ function Landing({ start }: { start: () => void }) {
               See how it works <ArrowDownIcon />
             </a>
           </div>
-          <div className="hero-foot">
-            <span>BUILT FOR RASPBERRY PI</span>
-            <span className="slash">/</span>
-            <span>GROUNDED IN HARDWARE</span>
-          </div>
         </div>
         <Board />
       </section>
-      <div className="manifesto">
-        <span className="mono">THE CAMERA IS A HINT.</span>
-        <p>The bus is the truth.</p>
-        <span className="mono right-note">EVERY CLAIM. A REAL READING.</span>
-      </div>
+      <div className="manifesto"></div>
       <section className="problem">
         <div className="section-label">
           <span>01 / THE GAP</span>
