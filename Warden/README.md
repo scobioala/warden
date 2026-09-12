@@ -43,14 +43,14 @@ Use **Run demo** for a deterministic Pi/Qwiic walkthrough with no physical hardw
 
 ## What is real vs. simulated
 
-| Capability | Live mode | Mock mode |
-| --- | --- | --- |
-| Phone microphone and ElevenLabs agent | Real | Real |
-| Browser camera and camera-frame analysis | Real, opt-in | Real, opt-in |
-| Reading legible labels/codes | Model-assisted | Model-assisted |
-| Laptop build architecture | Generated from current voice + vision context | Same flow |
-| Pi bridge / I²C values | Connected Pi adapter when configured | Deterministic simulated state |
-| APDS9960 / button / encoder / PiTFT walkthrough | Hardware-dependent | One-click deterministic walkthrough |
+| Capability                                      | Live mode                                     | Mock mode                           |
+| ----------------------------------------------- | --------------------------------------------- | ----------------------------------- |
+| Phone microphone and ElevenLabs agent           | Real                                          | Real                                |
+| Browser camera and camera-frame analysis        | Real, opt-in                                  | Real, opt-in                        |
+| Reading legible labels/codes                    | Model-assisted                                | Model-assisted                      |
+| Laptop build architecture                       | Generated from current voice + vision context | Same flow                           |
+| Pi bridge / I²C values                          | Connected Pi adapter when configured          | Deterministic simulated state       |
+| APDS9960 / button / encoder / PiTFT walkthrough | Hardware-dependent                            | One-click deterministic walkthrough |
 
 Warden never represents mock I²C state as a physical observation.
 

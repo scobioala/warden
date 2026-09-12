@@ -1,90 +1,918 @@
-import { useEffect, useRef, useState } from 'react'
-import { createRoot } from 'react-dom/client'
-import { Conversation, type VoiceConversation } from '@elevenlabs/client'
-import { Activity, ArrowRight, Camera, Check, ChevronRight, CircleDot, Command, Eye, Mic, Play, Power, RotateCw, ShieldCheck, Sparkles, Send, Waves } from 'lucide-react'
-import './styles.css'
-import './companion.css'
-import './live-draw.css'
-import './context-aware.css'
-import './action-items.css'
-import './clean-camera.css'
-import './architecture.css'
+import { useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { Conversation, type VoiceConversation } from "@elevenlabs/client";
+import {
+  Activity,
+  ArrowRight,
+  Camera,
+  Check,
+  ChevronRight,
+  CircleDot,
+  Command,
+  Eye,
+  Mic,
+  Play,
+  Power,
+  RotateCw,
+  ShieldCheck,
+  Sparkles,
+  Send,
+  Waves,
+} from "lucide-react";
+import "./styles.css";
+import "./companion.css";
+import "./live-draw.css";
+import "./context-aware.css";
+import "./action-items.css";
+import "./clean-camera.css";
+import "./architecture.css";
 
-type Stage = 'home' | 'show' | 'connect' | 'verify' | 'gesture' | 'complete'
-type Hardware = { connected: boolean; i2c: string[]; button: boolean; encoder: number; gesture: string; pitft: string }
-type CompanionPlan = { instruction: string; source: string; connector: string; target: string; actions: string[]; verification: string; confidence: 'waiting' | 'tentative' | 'confirmed' }
-const INITIAL: Hardware = { connected: false, i2c: ['0x3C · Mini PiTFT', '0x6E · Qwiic Button', '0x36 · Rotary Encoder'], button: false, encoder: 0, gesture: 'waiting', pitft: 'WARDEN READY' }
-const EMPTY_PLAN: CompanionPlan = { instruction: '', source: '', connector: '', target: '', actions: [], verification: '', confidence: 'waiting' }
+type Stage = "home" | "show" | "connect" | "verify" | "gesture" | "complete";
+type Hardware = {
+  connected: boolean;
+  i2c: string[];
+  button: boolean;
+  encoder: number;
+  gesture: string;
+  pitft: string;
+};
+type CompanionPlan = {
+  instruction: string;
+  source: string;
+  connector: string;
+  target: string;
+  actions: string[];
+  verification: string;
+  confidence: "waiting" | "tentative" | "confirmed";
+};
+const INITIAL: Hardware = {
+  connected: false,
+  i2c: ["0x3C · Mini PiTFT", "0x6E · Qwiic Button", "0x36 · Rotary Encoder"],
+  button: false,
+  encoder: 0,
+  gesture: "waiting",
+  pitft: "WARDEN READY",
+};
+const EMPTY_PLAN: CompanionPlan = {
+  instruction: "",
+  source: "",
+  connector: "",
+  target: "",
+  actions: [],
+  verification: "",
+  confidence: "waiting",
+};
 
 function App() {
-  const [stage, setStage] = useState<Stage>('home')
-  const [hardware, setHardware] = useState<Hardware>(INITIAL)
-  const [camera, setCamera] = useState(false)
-  const [listening, setListening] = useState(false)
-  const stream = useRef<MediaStream | null>(null)
-  const recognitionRef = useRef<any>(null)
-  const elevenRef = useRef<VoiceConversation | null>(null)
-  const visionBusy = useRef(false)
-  const lastVision = useRef('')
-  const agentMode = useRef('listening')
-  const voiceTraceId = useRef(`${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
-  const lastVadLogged = useRef(0)
-  const video = useRef<HTMLVideoElement>(null)
-  const [demoRunning, setDemoRunning] = useState(false)
-  const [question, setQuestion] = useState('')
-  const [answer, setAnswer] = useState('I can help identify parts, diagnose the Pi’s signals, and guide one safe next action.')
-  const [thinking, setThinking] = useState(false)
-  const [mission, setMission] = useState('')
-  const [currentStep, setCurrentStep] = useState('')
-  const [watching, setWatching] = useState(false)
-  const [showText, setShowText] = useState(false)
-  const [voiceMode, setVoiceMode] = useState(false)
-  const [cameraRequest, setCameraRequest] = useState(false)
-  const [companionPlan, setCompanionPlan] = useState<CompanionPlan>(EMPTY_PLAN)
-  const isVerified = stage === 'verify' || stage === 'gesture' || stage === 'complete'
+  const [stage, setStage] = useState<Stage>("home");
+  const [hardware, setHardware] = useState<Hardware>(INITIAL);
+  const [camera, setCamera] = useState(false);
+  const [listening, setListening] = useState(false);
+  const stream = useRef<MediaStream | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const elevenRef = useRef<VoiceConversation | null>(null);
+  const visionBusy = useRef(false);
+  const lastVision = useRef("");
+  const agentMode = useRef("listening");
+  const voiceTraceId = useRef(
+    `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  const lastVadLogged = useRef(0);
+  const video = useRef<HTMLVideoElement>(null);
+  const [demoRunning, setDemoRunning] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState(
+    "I can help identify parts, diagnose the Pi’s signals, and guide one safe next action.",
+  );
+  const [thinking, setThinking] = useState(false);
+  const [mission, setMission] = useState("");
+  const [currentStep, setCurrentStep] = useState("");
+  const [watching, setWatching] = useState(false);
+  const [showText, setShowText] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [cameraRequest, setCameraRequest] = useState(false);
+  const [companionPlan, setCompanionPlan] = useState<CompanionPlan>(EMPTY_PLAN);
+  const isVerified =
+    stage === "verify" || stage === "gesture" || stage === "complete";
 
-  const traceVoice = (event: string, detail: Record<string, unknown> = {}) => { const bridge = import.meta.env.VITE_WARDEN_BRIDGE_URL || (location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'http://127.0.0.1:8787' : ''); void fetch(`${bridge}/diagnostics/voice`, {method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,body:JSON.stringify({event,session:voiceTraceId.current,detail})}).catch(() => undefined) }
-  const syncCompanion = (instruction: string, observation?: string) => { const bridge = import.meta.env.VITE_WARDEN_BRIDGE_URL || (location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'http://127.0.0.1:8787' : ''); if(instruction.length >= 12) void fetch(`${bridge}/companion`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({instruction,observation})}).then(r=>r.json()).then(setCompanionPlan).catch(() => undefined) }
+  const traceVoice = (event: string, detail: Record<string, unknown> = {}) => {
+    const bridge =
+      import.meta.env.VITE_WARDEN_BRIDGE_URL ||
+      (location.hostname === "127.0.0.1" || location.hostname === "localhost"
+        ? "http://127.0.0.1:8787"
+        : "");
+    void fetch(`${bridge}/diagnostics/voice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({ event, session: voiceTraceId.current, detail }),
+    }).catch(() => undefined);
+  };
+  const syncCompanion = (instruction: string, observation?: string) => {
+    const bridge =
+      import.meta.env.VITE_WARDEN_BRIDGE_URL ||
+      (location.hostname === "127.0.0.1" || location.hostname === "localhost"
+        ? "http://127.0.0.1:8787"
+        : "");
+    if (instruction.length >= 12)
+      void fetch(`${bridge}/companion`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instruction, observation }),
+      })
+        .then((r) => r.json())
+        .then(setCompanionPlan)
+        .catch(() => undefined);
+  };
 
-  const say = (text: string) => { if ('speechSynthesis' in window) { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(text.replace(/[📷👋]/g, '')); const voices = window.speechSynthesis.getVoices(); utterance.voice = voices.find(v => /Samantha|Ava|Allison|Microsoft Aria|Google US English|Siri/i.test(v.name)) || voices.find(v => /en-US/i.test(v.lang)) || null; utterance.lang='en-US'; utterance.rate=1.03; utterance.pitch=1; utterance.onend = () => { if (voiceMode) window.setTimeout(() => listen(), 350) }; window.speechSynthesis.speak(utterance) } }
+  const say = (text: string) => {
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(
+        text.replace(/[📷👋]/g, ""),
+      );
+      const voices = window.speechSynthesis.getVoices();
+      utterance.voice =
+        voices.find((v) =>
+          /Samantha|Ava|Allison|Microsoft Aria|Google US English|Siri/i.test(
+            v.name,
+          ),
+        ) ||
+        voices.find((v) => /en-US/i.test(v.lang)) ||
+        null;
+      utterance.lang = "en-US";
+      utterance.rate = 1.03;
+      utterance.pitch = 1;
+      utterance.onend = () => {
+        if (voiceMode) window.setTimeout(() => listen(), 350);
+      };
+      window.speechSynthesis.speak(utterance);
+    }
+  };
   const toggleCamera = async () => {
-    if (camera) { stream.current?.getTracks().forEach(t => t.stop()); setCamera(false); return }
-    try { stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }); setCamera(true); setCameraRequest(false); elevenRef.current?.sendContextualUpdate('The learner has approved and opened the camera. Ask them to show the relevant hardware now.') } catch { setAnswer('Camera access was not approved. Ask me again when you are ready to show the hardware.') }
-  }
-  const start = () => { setStage('show'); say('Show me the APDS 9960 sensor and a Qwiic cable.') }
-  const next = () => { if (stage === 'show') { setStage('connect'); say('Connect the Qwiic cable from your Pi chain to the APDS 9960. It is low voltage and keyed; never force the connector.') } else if (stage === 'connect') { setStage('verify'); setHardware({ ...hardware, connected: true, i2c: [...hardware.i2c, '0x39 · APDS9960'], button: true, pitft: 'VERIFIED' }); say('Verified. You connected your first I2C sensor.') } else if (stage === 'verify') { setStage('gesture'); setHardware(h => ({ ...h, gesture: 'up' })); say('Wave over the sensor to advance.') } else if (stage === 'gesture') { setStage('complete'); setHardware(h => ({ ...h, encoder: 1, button: true, gesture: 'down' })); say('Lesson one selected. Press the Qwiic button to confirm.') } }
-  const demo = async () => { if (demoRunning) return; setDemoRunning(true); setStage('show'); await wait(1500); setStage('connect'); await wait(2200); setStage('verify'); setHardware({ ...INITIAL, connected: true, i2c: [...INITIAL.i2c, '0x39 · APDS9960'], button: true, pitft: 'VERIFIED' }); await wait(2200); setStage('gesture'); setHardware(h => ({...h, gesture:'up'})); await wait(1500); setStage('complete'); setHardware(h => ({...h, encoder:1, gesture:'down'})); setDemoRunning(false) }
-  const askWarden = async (message = question, image?: string, activeMission = mission) => { if (!message.trim() || thinking) return; setThinking(true); setAnswer(''); try { const bridge = import.meta.env.VITE_WARDEN_BRIDGE_URL || (location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'http://127.0.0.1:8787' : ''); const res = await fetch(`${bridge}/coach/stream`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message,hardware:{...hardware,camera_live:camera,watching},image,mission:activeMission,current_step:currentStep})}); if(!res.body) throw new Error('No response stream'); const reader=res.body.getReader(), decoder=new TextDecoder(); let buffered='', full=''; while(true){const {value,done}=await reader.read(); if(done) break; buffered+=decoder.decode(value,{stream:true}); const packets=buffered.split('\n\n'); buffered=packets.pop()||''; for(const packet of packets){if(!packet.startsWith('data: ')) continue; const event=JSON.parse(packet.slice(6)); if(event.delta){full+=event.delta;setAnswer(full)}}} if(!full) throw new Error('Empty response'); if(activeMission) setCurrentStep(full); say(full) } catch { setAnswer('Warden’s reasoning bridge is offline. Start the Pi bridge or use the Mock Mode guided lessons.') } finally { setThinking(false) } }
-  const listen = () => { if(recognitionRef.current) return; const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; if (!Recognition) { setShowText(true); setVoiceMode(false); setAnswer('Speech recognition is unavailable in this browser. Type your goal below instead.'); return } const recognition = new Recognition(); recognitionRef.current=recognition; recognition.lang='en-US'; recognition.interimResults=false; recognition.onstart=()=>setListening(true); recognition.onend=()=>{setListening(false);recognitionRef.current=null}; recognition.onresult=(e:any)=>{const words=e.results[0][0].transcript;setQuestion(words); if(mission) askWarden(words); else if(/\b(build|make|assemble|connect|create|project)\b/i.test(words)) startMission(words); else askWarden(words)}; recognition.start() }
-  const toggleVoice = async () => { if(elevenRef.current) { traceVoice('session_end_requested'); await elevenRef.current.endSession(); elevenRef.current=null; setVoiceMode(false); setListening(false); return } try { traceVoice('session_start_requested',{camera}); setAnswer('Allow microphone access to talk with Warden…'); const mic = await navigator.mediaDevices.getUserMedia({audio:true}); mic.getTracks().forEach(track=>track.stop()); traceVoice('microphone_permission_granted'); const bridge = import.meta.env.VITE_WARDEN_BRIDGE_URL || (location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'http://127.0.0.1:8787' : ''); const session = await fetch(`${bridge}/elevenlabs/session`, {cache:'no-store'}).then(r=>r.json()); if(!session.signed_url) throw new Error(session.error || 'The voice session URL was not returned'); setVoiceMode(true); setAnswer('Warden is connecting…'); elevenRef.current = await Conversation.startSession({signedUrl:session.signed_url, preferHeadphonesForIosDevices:true, dynamicVariables:{camera_live:camera, pi_context:JSON.stringify(hardware)}, onConnect:()=>{traceVoice('connected');setAnswer('Hi, I’m Warden. How can I help you build today?')}, onDisconnect:(details)=>{traceVoice('disconnected',{reason:details.reason,closeCode:'closeCode' in details ? details.closeCode : undefined});elevenRef.current=null;setVoiceMode(false);setListening(false)}, onModeChange:({mode})=>{agentMode.current=mode;elevenRef.current?.setMicMuted(mode==='speaking');traceVoice('mode_change',{mode,mic_muted:mode==='speaking'});setListening(mode==='listening')}, onMessage:({message,role})=>{traceVoice('message',{role,text:message.slice(0,300),characters:message.length});if(role==='agent'){setAnswer(message); if(!camera && /camera|show me|take a look|let me see/i.test(message)) setCameraRequest(true)}}, onInterruption:()=>traceVoice('interruption_received'), onAgentResponseCorrection:({original_agent_response,corrected_agent_response})=>traceVoice('agent_response_corrected',{original:original_agent_response.slice(0,300),corrected:corrected_agent_response.slice(0,300)}), onVadScore:({vadScore})=>{if(Date.now()-lastVadLogged.current>1000){lastVadLogged.current=Date.now();traceVoice('vad_score',{score:Number(vadScore.toFixed(3))})}}, onError:(message,context)=>{traceVoice('voice_error',{message,context:String(context || '').slice(0,300)});setAnswer(`Voice connection issue: ${message}`)}}) as VoiceConversation; elevenRef.current.setMicMuted(agentMode.current==='speaking') } catch (error) { setVoiceMode(false); const message = error instanceof Error ? error.message : 'Unknown connection error'; traceVoice('setup_error',{message}); setAnswer(`Voice setup failed: ${message}. Check that Safari has microphone permission for this page.`) } }
-  const captureView = () => { if (!video.current || !camera) return undefined; const canvas=document.createElement('canvas'); canvas.width=640; canvas.height=480; canvas.getContext('2d')?.drawImage(video.current,0,0,640,480); return canvas.toDataURL('image/jpeg',.78) }
-  const inspectView = () => { const image=captureView(); if(!image) { setAnswer('Enable the camera first, then keep the component centered and well lit.'); return } askWarden(mission ? 'Check whether I completed the current build action correctly. If not, name one visible correction. If uncertain, ask for a clearer angle.' : 'Inspect this workbench image. Identify only known kit hardware. If uncertain, ask me to adjust the view.', image) }
-  const startMission = (goal = question.trim()) => { if(!goal) { setAnswer('Tell me what you want to build first.'); return } setMission(goal); setCurrentStep(''); askWarden(`Create a safe build plan for: ${goal}. Give only step 1. State what I should show in the camera and what Pi signal will verify success.`, undefined, goal) }
-  useEffect(() => { if(!watching || !camera || !mission) return; const id=window.setInterval(() => { const image=captureView(); if(image) askWarden('Watch my current build step. Inspect the frame and correct one visible issue, or confirm the next verification action.',image) }, 12000); return () => window.clearInterval(id) }, [watching,camera,mission])
-  useEffect(() => { if(!voiceMode || !camera) return; const id=window.setInterval(async () => { if(visionBusy.current || agentMode.current === 'speaking') return; const image=captureView(); if(!image) return; visionBusy.current=true; try { const bridge = import.meta.env.VITE_WARDEN_BRIDGE_URL || (location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'http://127.0.0.1:8787' : ''); const result = await fetch(`${bridge}/vision`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image,mission,pi_state:hardware})}).then(r=>r.json()); const observation = result.observation || ''; if(observation && observation !== lastVision.current) { lastVision.current=observation; elevenRef.current?.sendContextualUpdate(`Live camera observation, for your next response only: ${observation}`); if(result.kind === 'ok' || result.kind === 'guess') syncCompanion(`Camera observation: ${observation}`); if(result.kind === 'correct') setAnswer(observation.replace(/^CORRECT:\s*/i,'')) } } catch { /* Voice remains available if vision is offline. */ } finally { visionBusy.current=false } }, 7000); return () => window.clearInterval(id) }, [voiceMode,camera,mission])
-  useEffect(() => { if (camera && video.current && stream.current) { video.current.srcObject = stream.current; video.current.play().catch(() => undefined) } }, [camera])
-  useEffect(() => { const bridge = import.meta.env.VITE_WARDEN_BRIDGE_URL || (location.hostname === '127.0.0.1' || location.hostname === 'localhost' ? 'http://127.0.0.1:8787' : ''); const sync = () => fetch(`${bridge}/companion`, {cache:'no-store'}).then(r=>r.json()).then(setCompanionPlan).catch(()=>undefined); sync(); const id=window.setInterval(sync, 1000); return ()=>window.clearInterval(id) }, [])
-  useEffect(() => { if(voiceMode && answer.length >= 20) syncCompanion(answer) }, [answer, voiceMode])
-  useEffect(() => () => { stream.current?.getTracks().forEach(t => t.stop()); recognitionRef.current?.stop() }, [])
-  const copy = { home: ['What are we building today?', 'Your workbench is quiet. Warden is ready when you are.'], show: ['Show Warden the pieces.', 'Hold the APDS9960 sensor and a Qwiic cable in the camera frame.'], connect: ['Make one safe connection.', 'Connect a Qwiic cable from your Pi chain to the APDS9960. The connector is keyed—never force it.'], verify: ['Connection confirmed.', 'Warden found your sensor on the I²C bus and notified the workbench.'], gesture: ['Try a gesture.', 'Wave over the APDS9960 to continue to your next lesson.'], complete: ['First sensor: complete.', 'Turn the encoder to choose a lesson, then press the Qwiic button to confirm.'] }[stage]
-  return <main>
-    <header><div className="brand"><span className="crest"><ShieldCheck size={19}/></span><span>WARDEN</span><i>workbench guardian</i></div><div className="top-actions"><span className="live"><b/> LIVE WORKBENCH</span><button className="icon" onClick={toggleCamera} title="Toggle camera"><Camera size={17}/></button><button className="demo" onClick={demo}><Play size={13} fill="currentColor"/> {demoRunning ? 'DEMO RUNNING' : 'RUN DEMO'}</button></div></header>
-    <section className="shell">
-      <div className="hero-copy ios-voice"><div className="voice voice-first"><button className={(listening || voiceMode) ? 'mic on' : 'mic'} onClick={toggleVoice}><Mic size={28}/></button><div><strong>{listening ? 'Listening' : voiceMode ? 'Warden is here' : 'Talk to Warden'}</strong><small>{voiceMode ? 'Tap to end conversation' : 'Your workbench companion'}</small></div></div>{cameraRequest && <button className="camera-request" onClick={toggleCamera}><Camera size={17}/><span><b>Warden wants to see this</b><small>Open camera</small></span><ChevronRight size={18}/></button>}<div className="warden-answer"><Sparkles size={14}/><span>{answer || 'I’m listening.'}</span></div></div>
-      <CameraFrame active={camera} video={video} inspect={inspectView}/>
-    </section>
-    <ConnectionCompanion plan={companionPlan}/>
-    <section className="lower"><Progress stage={stage}/><HardwareConsole hardware={hardware} verified={isVerified}/><PiTft verified={isVerified} text={hardware.pitft}/></section>
-    {isVerified && <div className="verified-toast"><Check size={18}/><span><b>HARDWARE VERIFIED</b><small>APDS9960 · 0x39 · I²C online</small></span><Sparkles size={17}/></div>}
-  </main>
+    if (camera) {
+      stream.current?.getTracks().forEach((t) => t.stop());
+      setCamera(false);
+      return;
+    }
+    try {
+      stream.current = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      });
+      setCamera(true);
+      setCameraRequest(false);
+      elevenRef.current?.sendContextualUpdate(
+        "The learner has approved and opened the camera. Ask them to show the relevant hardware now.",
+      );
+    } catch {
+      setAnswer(
+        "Camera access was not approved. Ask me again when you are ready to show the hardware.",
+      );
+    }
+  };
+  const start = () => {
+    setStage("show");
+    say("Show me the APDS 9960 sensor and a Qwiic cable.");
+  };
+  const next = () => {
+    if (stage === "show") {
+      setStage("connect");
+      say(
+        "Connect the Qwiic cable from your Pi chain to the APDS 9960. It is low voltage and keyed; never force the connector.",
+      );
+    } else if (stage === "connect") {
+      setStage("verify");
+      setHardware({
+        ...hardware,
+        connected: true,
+        i2c: [...hardware.i2c, "0x39 · APDS9960"],
+        button: true,
+        pitft: "VERIFIED",
+      });
+      say("Verified. You connected your first I2C sensor.");
+    } else if (stage === "verify") {
+      setStage("gesture");
+      setHardware((h) => ({ ...h, gesture: "up" }));
+      say("Wave over the sensor to advance.");
+    } else if (stage === "gesture") {
+      setStage("complete");
+      setHardware((h) => ({ ...h, encoder: 1, button: true, gesture: "down" }));
+      say("Lesson one selected. Press the Qwiic button to confirm.");
+    }
+  };
+  const demo = async () => {
+    if (demoRunning) return;
+    setDemoRunning(true);
+    setStage("show");
+    await wait(1500);
+    setStage("connect");
+    await wait(2200);
+    setStage("verify");
+    setHardware({
+      ...INITIAL,
+      connected: true,
+      i2c: [...INITIAL.i2c, "0x39 · APDS9960"],
+      button: true,
+      pitft: "VERIFIED",
+    });
+    await wait(2200);
+    setStage("gesture");
+    setHardware((h) => ({ ...h, gesture: "up" }));
+    await wait(1500);
+    setStage("complete");
+    setHardware((h) => ({ ...h, encoder: 1, gesture: "down" }));
+    setDemoRunning(false);
+  };
+  const askWarden = async (
+    message = question,
+    image?: string,
+    activeMission = mission,
+  ) => {
+    if (!message.trim() || thinking) return;
+    setThinking(true);
+    setAnswer("");
+    try {
+      const bridge =
+        import.meta.env.VITE_WARDEN_BRIDGE_URL ||
+        (location.hostname === "127.0.0.1" || location.hostname === "localhost"
+          ? "http://127.0.0.1:8787"
+          : "");
+      const res = await fetch(`${bridge}/coach/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          hardware: { ...hardware, camera_live: camera, watching },
+          image,
+          mission: activeMission,
+          current_step: currentStep,
+        }),
+      });
+      if (!res.body) throw new Error("No response stream");
+      const reader = res.body.getReader(),
+        decoder = new TextDecoder();
+      let buffered = "",
+        full = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffered += decoder.decode(value, { stream: true });
+        const packets = buffered.split("\n\n");
+        buffered = packets.pop() || "";
+        for (const packet of packets) {
+          if (!packet.startsWith("data: ")) continue;
+          const event = JSON.parse(packet.slice(6));
+          if (event.delta) {
+            full += event.delta;
+            setAnswer(full);
+          }
+        }
+      }
+      if (!full) throw new Error("Empty response");
+      if (activeMission) setCurrentStep(full);
+      say(full);
+    } catch {
+      setAnswer(
+        "Warden’s reasoning bridge is offline. Start the Pi bridge or use the Mock Mode guided lessons.",
+      );
+    } finally {
+      setThinking(false);
+    }
+  };
+  const listen = () => {
+    if (recognitionRef.current) return;
+    const Recognition =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+    if (!Recognition) {
+      setShowText(true);
+      setVoiceMode(false);
+      setAnswer(
+        "Speech recognition is unavailable in this browser. Type your goal below instead.",
+      );
+      return;
+    }
+    const recognition = new Recognition();
+    recognitionRef.current = recognition;
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.onstart = () => setListening(true);
+    recognition.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+    recognition.onresult = (e: any) => {
+      const words = e.results[0][0].transcript;
+      setQuestion(words);
+      if (mission) askWarden(words);
+      else if (/\b(build|make|assemble|connect|create|project)\b/i.test(words))
+        startMission(words);
+      else askWarden(words);
+    };
+    recognition.start();
+  };
+  const toggleVoice = async () => {
+    if (elevenRef.current) {
+      traceVoice("session_end_requested");
+      await elevenRef.current.endSession();
+      elevenRef.current = null;
+      setVoiceMode(false);
+      setListening(false);
+      return;
+    }
+    try {
+      traceVoice("session_start_requested", { camera });
+      setAnswer("Allow microphone access to talk with Warden…");
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mic.getTracks().forEach((track) => track.stop());
+      traceVoice("microphone_permission_granted");
+      const bridge =
+        import.meta.env.VITE_WARDEN_BRIDGE_URL ||
+        (location.hostname === "127.0.0.1" || location.hostname === "localhost"
+          ? "http://127.0.0.1:8787"
+          : "");
+      const session = await fetch(`${bridge}/elevenlabs/session`, {
+        cache: "no-store",
+      }).then((r) => r.json());
+      if (!session.signed_url)
+        throw new Error(
+          session.error || "The voice session URL was not returned",
+        );
+      setVoiceMode(true);
+      setAnswer("Warden is connecting…");
+      elevenRef.current = (await Conversation.startSession({
+        signedUrl: session.signed_url,
+        preferHeadphonesForIosDevices: true,
+        dynamicVariables: {
+          camera_live: camera,
+          pi_context: JSON.stringify(hardware),
+        },
+        onConnect: () => {
+          traceVoice("connected");
+          setAnswer("Hi, I’m Warden. How can I help you build today?");
+        },
+        onDisconnect: (details) => {
+          traceVoice("disconnected", {
+            reason: details.reason,
+            closeCode: "closeCode" in details ? details.closeCode : undefined,
+          });
+          elevenRef.current = null;
+          setVoiceMode(false);
+          setListening(false);
+        },
+        onModeChange: ({ mode }) => {
+          agentMode.current = mode;
+          elevenRef.current?.setMicMuted(mode === "speaking");
+          traceVoice("mode_change", { mode, mic_muted: mode === "speaking" });
+          setListening(mode === "listening");
+        },
+        onMessage: ({ message, role }) => {
+          traceVoice("message", {
+            role,
+            text: message.slice(0, 300),
+            characters: message.length,
+          });
+          if (role === "agent") {
+            setAnswer(message);
+            if (
+              !camera &&
+              /camera|show me|take a look|let me see/i.test(message)
+            )
+              setCameraRequest(true);
+          }
+        },
+        onInterruption: () => traceVoice("interruption_received"),
+        onAgentResponseCorrection: ({
+          original_agent_response,
+          corrected_agent_response,
+        }) =>
+          traceVoice("agent_response_corrected", {
+            original: original_agent_response.slice(0, 300),
+            corrected: corrected_agent_response.slice(0, 300),
+          }),
+        onVadScore: ({ vadScore }) => {
+          if (Date.now() - lastVadLogged.current > 1000) {
+            lastVadLogged.current = Date.now();
+            traceVoice("vad_score", { score: Number(vadScore.toFixed(3)) });
+          }
+        },
+        onError: (message, context) => {
+          traceVoice("voice_error", {
+            message,
+            context: String(context || "").slice(0, 300),
+          });
+          setAnswer(`Voice connection issue: ${message}`);
+        },
+      })) as VoiceConversation;
+      elevenRef.current.setMicMuted(agentMode.current === "speaking");
+    } catch (error) {
+      setVoiceMode(false);
+      const message =
+        error instanceof Error ? error.message : "Unknown connection error";
+      traceVoice("setup_error", { message });
+      setAnswer(
+        `Voice setup failed: ${message}. Check that Safari has microphone permission for this page.`,
+      );
+    }
+  };
+  const captureView = () => {
+    if (!video.current || !camera) return undefined;
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = 480;
+    canvas.getContext("2d")?.drawImage(video.current, 0, 0, 640, 480);
+    return canvas.toDataURL("image/jpeg", 0.78);
+  };
+  const inspectView = () => {
+    const image = captureView();
+    if (!image) {
+      setAnswer(
+        "Enable the camera first, then keep the component centered and well lit.",
+      );
+      return;
+    }
+    askWarden(
+      mission
+        ? "Check whether I completed the current build action correctly. If not, name one visible correction. If uncertain, ask for a clearer angle."
+        : "Inspect this workbench image. Identify only known kit hardware. If uncertain, ask me to adjust the view.",
+      image,
+    );
+  };
+  const startMission = (goal = question.trim()) => {
+    if (!goal) {
+      setAnswer("Tell me what you want to build first.");
+      return;
+    }
+    setMission(goal);
+    setCurrentStep("");
+    askWarden(
+      `Create a safe build plan for: ${goal}. Give only step 1. State what I should show in the camera and what Pi signal will verify success.`,
+      undefined,
+      goal,
+    );
+  };
+  useEffect(() => {
+    if (!watching || !camera || !mission) return;
+    const id = window.setInterval(() => {
+      const image = captureView();
+      if (image)
+        askWarden(
+          "Watch my current build step. Inspect the frame and correct one visible issue, or confirm the next verification action.",
+          image,
+        );
+    }, 12000);
+    return () => window.clearInterval(id);
+  }, [watching, camera, mission]);
+  useEffect(() => {
+    if (!voiceMode || !camera) return;
+    const id = window.setInterval(async () => {
+      if (visionBusy.current || agentMode.current === "speaking") return;
+      const image = captureView();
+      if (!image) return;
+      visionBusy.current = true;
+      try {
+        const bridge =
+          import.meta.env.VITE_WARDEN_BRIDGE_URL ||
+          (location.hostname === "127.0.0.1" ||
+          location.hostname === "localhost"
+            ? "http://127.0.0.1:8787"
+            : "");
+        const result = await fetch(`${bridge}/vision`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image, mission, pi_state: hardware }),
+        }).then((r) => r.json());
+        const observation = result.observation || "";
+        if (observation && observation !== lastVision.current) {
+          lastVision.current = observation;
+          elevenRef.current?.sendContextualUpdate(
+            `Live camera observation, for your next response only: ${observation}`,
+          );
+          if (result.kind === "ok" || result.kind === "guess")
+            syncCompanion(`Camera observation: ${observation}`);
+          if (result.kind === "correct")
+            setAnswer(observation.replace(/^CORRECT:\s*/i, ""));
+        }
+      } catch {
+        /* Voice remains available if vision is offline. */
+      } finally {
+        visionBusy.current = false;
+      }
+    }, 7000);
+    return () => window.clearInterval(id);
+  }, [voiceMode, camera, mission]);
+  useEffect(() => {
+    if (camera && video.current && stream.current) {
+      video.current.srcObject = stream.current;
+      video.current.play().catch(() => undefined);
+    }
+  }, [camera]);
+  useEffect(() => {
+    const bridge =
+      import.meta.env.VITE_WARDEN_BRIDGE_URL ||
+      (location.hostname === "127.0.0.1" || location.hostname === "localhost"
+        ? "http://127.0.0.1:8787"
+        : "");
+    const sync = () =>
+      fetch(`${bridge}/companion`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then(setCompanionPlan)
+        .catch(() => undefined);
+    sync();
+    const id = window.setInterval(sync, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  useEffect(() => {
+    if (voiceMode && answer.length >= 20) syncCompanion(answer);
+  }, [answer, voiceMode]);
+  useEffect(
+    () => () => {
+      stream.current?.getTracks().forEach((t) => t.stop());
+      recognitionRef.current?.stop();
+    },
+    [],
+  );
+  const copy = {
+    home: [
+      "What are we building today?",
+      "Your workbench is quiet. Warden is ready when you are.",
+    ],
+    show: [
+      "Show Warden the pieces.",
+      "Hold the APDS9960 sensor and a Qwiic cable in the camera frame.",
+    ],
+    connect: [
+      "Make one safe connection.",
+      "Connect a Qwiic cable from your Pi chain to the APDS9960. The connector is keyed—never force it.",
+    ],
+    verify: [
+      "Connection confirmed.",
+      "Warden found your sensor on the I²C bus and notified the workbench.",
+    ],
+    gesture: [
+      "Try a gesture.",
+      "Wave over the APDS9960 to continue to your next lesson.",
+    ],
+    complete: [
+      "First sensor: complete.",
+      "Turn the encoder to choose a lesson, then press the Qwiic button to confirm.",
+    ],
+  }[stage];
+  return (
+    <main>
+      <header>
+        <div className="brand">
+          <span className="crest">
+            <ShieldCheck size={19} />
+          </span>
+          <span>WARDEN</span>
+          <i>workbench guardian</i>
+        </div>
+        <div className="top-actions">
+          <span className="live">
+            <b /> LIVE WORKBENCH
+          </span>
+          <button className="icon" onClick={toggleCamera} title="Toggle camera">
+            <Camera size={17} />
+          </button>
+          <button className="demo" onClick={demo}>
+            <Play size={13} fill="currentColor" />{" "}
+            {demoRunning ? "DEMO RUNNING" : "RUN DEMO"}
+          </button>
+        </div>
+      </header>
+      <section className="shell">
+        <div className="hero-copy ios-voice">
+          <div className="voice voice-first">
+            <button
+              className={listening || voiceMode ? "mic on" : "mic"}
+              onClick={toggleVoice}
+            >
+              <Mic size={28} />
+            </button>
+            <div>
+              <strong>
+                {listening
+                  ? "Listening"
+                  : voiceMode
+                    ? "Warden is here"
+                    : "Talk to Warden"}
+              </strong>
+              <small>
+                {voiceMode
+                  ? "Tap to end conversation"
+                  : "Your workbench companion"}
+              </small>
+            </div>
+          </div>
+          {cameraRequest && (
+            <button className="camera-request" onClick={toggleCamera}>
+              <Camera size={17} />
+              <span>
+                <b>Warden wants to see this</b>
+                <small>Open camera</small>
+              </span>
+              <ChevronRight size={18} />
+            </button>
+          )}
+          <div className="warden-answer">
+            <Sparkles size={14} />
+            <span>{answer || "I’m listening."}</span>
+          </div>
+        </div>
+        <CameraFrame active={camera} video={video} inspect={inspectView} />
+      </section>
+      <ConnectionCompanion plan={companionPlan} />
+      <section className="lower">
+        <Progress stage={stage} />
+        <HardwareConsole hardware={hardware} verified={isVerified} />
+        <PiTft verified={isVerified} text={hardware.pitft} />
+      </section>
+      {isVerified && (
+        <div className="verified-toast">
+          <Check size={18} />
+          <span>
+            <b>HARDWARE VERIFIED</b>
+            <small>APDS9960 · 0x39 · I²C online</small>
+          </span>
+          <Sparkles size={17} />
+        </div>
+      )}
+    </main>
+  );
 }
-const wait = (ms:number) => new Promise(r => setTimeout(r, ms))
-function CameraFrame({ active, video, inspect }: {active:boolean; video: React.RefObject<HTMLVideoElement | null>; inspect:()=>void}) { return <div className="camera-frame">{active ? <video ref={video} autoPlay playsInline muted/> : <div className="camera-placeholder"><div className="scan"/><Camera size={36}/><strong>Workbench view</strong><small>Enable camera to let Warden check your components.</small><button onClick={() => document.querySelector<HTMLButtonElement>('[title="Toggle camera"]')?.click()}>Enable camera</button></div>}{active && <button className="inspect" onClick={inspect}>Inspect view <Eye size={13}/></button>}</div> }
-function ConnectionCompanion({plan}:{plan:CompanionPlan}) { const ready=Boolean(plan.source && plan.target && plan.connector); const detected=plan.confidence === 'confirmed'; const source=plan.source || 'Source to confirm'; const link=plan.connector || 'Connector to confirm'; const target=plan.target || 'Component to confirm'; return <section className="companion"><div className="companion-head"><div><span className="eyebrow"><span/>SHARED BUILD SURFACE</span><h2>{ready ? 'Warden is drawing the next move.' : 'Warden is mapping the bench.'}</h2></div><div className="companion-live"><b/><span>PHONE + LAPTOP SYNCED</span></div></div><div className="companion-grid"><div className={'wiring-stage '+(ready ? 'ready' : 'awaiting')} key={plan.instruction}><small className="drawing-label">{ready ? `${plan.confidence.toUpperCase()} CONNECTION TRACE` : 'AWAITING CONFIRMED HARDWARE'}</small>{ready && <><svg className="trace-svg" viewBox="0 0 440 295" preserveAspectRatio="none" aria-hidden="true"><path className="trace-shadow" d="M165 140 C205 140 220 95 260 95 S300 140 318 140"/><path className="trace-line" d="M165 140 C205 140 220 95 260 95 S300 140 318 140"/><circle className="trace-dot" cx="165" cy="140" r="5"/><circle className="trace-dot end" cx="318" cy="140" r="5"/></svg></>}<div className="node pi-node"><div className="board-pins"><i/><i/><i/><i/></div><small>SOURCE</small><b>{source}</b><i>{ready ? 'camera or speech confirmed' : 'show or name this'}</i><span className="socket socket-out"/></div><div className="cable"><span/><b>{link}</b><small>align · seat · never force</small></div><div className="node target-node"><div className="sensor-lens"/><small>TARGET</small><b>{target}</b><i>{detected ? 'verification signal present' : ready ? 'awaiting verification' : 'show or name this'}</i><span className="socket socket-in"/></div><div className="signal-path"><span/><span/><span/></div></div><aside className="companion-instruction"><span className="step-number">01</span><small>WARDEN’S LIVE INSTRUCTION</small>{plan.actions.length > 0 && <><ol className="action-items">{plan.actions.map((action,index)=><li key={action}><b>{String(index+1).padStart(2,'0')}</b><span>{action}</span></li>)}</ol><div className={detected ? 'verify-line verified' : 'verify-line'}><ShieldCheck size={15}/><span>{plan.verification || 'VERIFY WITH WARDEN'}</span></div></>}</aside></div></section> }
-function Progress({stage}:{stage:Stage}) { const current = ['show','connect','verify','gesture','complete'].indexOf(stage); const steps = [{label:'Show', icon:<Camera size={14}/>},{label:'Connect',icon:<Waves size={14}/>},{label:'Verify',icon:<ShieldCheck size={14}/>},{label:'Gesture',icon:<Activity size={14}/>},{label:'Choose',icon:<RotateCw size={14}/>}]; return <div className="progress"><div className="section-title"><span>GUIDED PATH</span><small>{Math.max(0,current+1)} / 5</small></div>{steps.map((item, i) => <div className={'step '+(i<=current?'done':'')} key={item.label}><span>{i<current ? <Check size={13}/> : item.icon}</span><small>{item.label}</small></div>)}</div> }
-function HardwareConsole({hardware,verified}:{hardware:Hardware;verified:boolean}) { return <div className="console"><div className="section-title"><span><Command size={14}/> LIVE HARDWARE CONSOLE</span><small className="mock">MOCK MODE</small></div><div className="devices"><Device name="Pi bridge" value="ONLINE" ok/><Device name="I²C bus" value={verified ? '4 DEVICES' : 'SCANNING'} ok={verified}/><Device name="Qwiic button" value={hardware.button ? 'LED GREEN' : 'READY'} ok={hardware.button}/><Device name="APDS9960" value={hardware.connected ? `0x39 · ${hardware.gesture.toUpperCase()}` : 'AWAITING'} ok={hardware.connected}/></div><div className="address-row">{hardware.i2c.map(d=><span key={d}>{d}</span>)}</div></div> }
-function Device({name,value,ok}:{name:string;value:string;ok?:boolean}) { return <div className="device"><small>{name}</small><b className={ok?'ok':''}>{ok && <Check size={12}/>} {value}</b></div> }
-function PiTft({verified,text}:{verified:boolean;text:string}) { return <div className={'pitft '+(verified?'bright':'')}><div className="tft-head"><span>MINI PiTFT</span><Power size={12}/></div><div className="screen"><div className="screen-orb">{verified?<Check size={23}/>:<CircleDot size={23}/>}</div><b>{text}</b><small>{verified?'I²C · 0x39':'READY TO GUIDE'}</small></div><div className="tft-foot"><span/><span/><span/></div></div> }
-export default App
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+function CameraFrame({
+  active,
+  video,
+  inspect,
+}: {
+  active: boolean;
+  video: React.RefObject<HTMLVideoElement | null>;
+  inspect: () => void;
+}) {
+  return (
+    <div className="camera-frame">
+      {active ? (
+        <video ref={video} autoPlay playsInline muted />
+      ) : (
+        <div className="camera-placeholder">
+          <div className="scan" />
+          <Camera size={36} />
+          <strong>Workbench view</strong>
+          <small>Enable camera to let Warden check your components.</small>
+          <button
+            onClick={() =>
+              document
+                .querySelector<HTMLButtonElement>('[title="Toggle camera"]')
+                ?.click()
+            }
+          >
+            Enable camera
+          </button>
+        </div>
+      )}
+      {active && (
+        <button className="inspect" onClick={inspect}>
+          Inspect view <Eye size={13} />
+        </button>
+      )}
+    </div>
+  );
+}
+function ConnectionCompanion({ plan }: { plan: CompanionPlan }) {
+  const ready = Boolean(plan.source && plan.target && plan.connector);
+  const detected = plan.confidence === "confirmed";
+  const source = plan.source || "Source to confirm";
+  const link = plan.connector || "Connector to confirm";
+  const target = plan.target || "Component to confirm";
+  return (
+    <section className="companion">
+      <div className="companion-head">
+        <div>
+          <span className="eyebrow">
+            <span />
+            SHARED BUILD SURFACE
+          </span>
+          <h2>
+            {ready
+              ? "Warden is drawing the next move."
+              : "Warden is mapping the bench."}
+          </h2>
+        </div>
+        <div className="companion-live">
+          <b />
+          <span>PHONE + LAPTOP SYNCED</span>
+        </div>
+      </div>
+      <div className="companion-grid">
+        <div
+          className={"wiring-stage " + (ready ? "ready" : "awaiting")}
+          key={plan.instruction}
+        >
+          <small className="drawing-label">
+            {ready
+              ? `${plan.confidence.toUpperCase()} CONNECTION TRACE`
+              : "AWAITING CONFIRMED HARDWARE"}
+          </small>
+          {ready && (
+            <>
+              <svg
+                className="trace-svg"
+                viewBox="0 0 440 295"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  className="trace-shadow"
+                  d="M165 140 C205 140 220 95 260 95 S300 140 318 140"
+                />
+                <path
+                  className="trace-line"
+                  d="M165 140 C205 140 220 95 260 95 S300 140 318 140"
+                />
+                <circle className="trace-dot" cx="165" cy="140" r="5" />
+                <circle className="trace-dot end" cx="318" cy="140" r="5" />
+              </svg>
+            </>
+          )}
+          <div className="node pi-node">
+            <div className="board-pins">
+              <i />
+              <i />
+              <i />
+              <i />
+            </div>
+            <small>SOURCE</small>
+            <b>{source}</b>
+            <i>{ready ? "camera or speech confirmed" : "show or name this"}</i>
+            <span className="socket socket-out" />
+          </div>
+          <div className="cable">
+            <span />
+            <b>{link}</b>
+            <small>align · seat · never force</small>
+          </div>
+          <div className="node target-node">
+            <div className="sensor-lens" />
+            <small>TARGET</small>
+            <b>{target}</b>
+            <i>
+              {detected
+                ? "verification signal present"
+                : ready
+                  ? "awaiting verification"
+                  : "show or name this"}
+            </i>
+            <span className="socket socket-in" />
+          </div>
+          <div className="signal-path">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
+        <aside className="companion-instruction">
+          <span className="step-number">01</span>
+          <small>WARDEN’S LIVE INSTRUCTION</small>
+          {plan.actions.length > 0 && (
+            <>
+              <ol className="action-items">
+                {plan.actions.map((action, index) => (
+                  <li key={action}>
+                    <b>{String(index + 1).padStart(2, "0")}</b>
+                    <span>{action}</span>
+                  </li>
+                ))}
+              </ol>
+              <div
+                className={detected ? "verify-line verified" : "verify-line"}
+              >
+                <ShieldCheck size={15} />
+                <span>{plan.verification || "VERIFY WITH WARDEN"}</span>
+              </div>
+            </>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}
+function Progress({ stage }: { stage: Stage }) {
+  const current = ["show", "connect", "verify", "gesture", "complete"].indexOf(
+    stage,
+  );
+  const steps = [
+    { label: "Show", icon: <Camera size={14} /> },
+    { label: "Connect", icon: <Waves size={14} /> },
+    { label: "Verify", icon: <ShieldCheck size={14} /> },
+    { label: "Gesture", icon: <Activity size={14} /> },
+    { label: "Choose", icon: <RotateCw size={14} /> },
+  ];
+  return (
+    <div className="progress">
+      <div className="section-title">
+        <span>GUIDED PATH</span>
+        <small>{Math.max(0, current + 1)} / 5</small>
+      </div>
+      {steps.map((item, i) => (
+        <div
+          className={"step " + (i <= current ? "done" : "")}
+          key={item.label}
+        >
+          <span>{i < current ? <Check size={13} /> : item.icon}</span>
+          <small>{item.label}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+function HardwareConsole({
+  hardware,
+  verified,
+}: {
+  hardware: Hardware;
+  verified: boolean;
+}) {
+  return (
+    <div className="console">
+      <div className="section-title">
+        <span>
+          <Command size={14} /> LIVE HARDWARE CONSOLE
+        </span>
+        <small className="mock">MOCK MODE</small>
+      </div>
+      <div className="devices">
+        <Device name="Pi bridge" value="ONLINE" ok />
+        <Device
+          name="I²C bus"
+          value={verified ? "4 DEVICES" : "SCANNING"}
+          ok={verified}
+        />
+        <Device
+          name="Qwiic button"
+          value={hardware.button ? "LED GREEN" : "READY"}
+          ok={hardware.button}
+        />
+        <Device
+          name="APDS9960"
+          value={
+            hardware.connected
+              ? `0x39 · ${hardware.gesture.toUpperCase()}`
+              : "AWAITING"
+          }
+          ok={hardware.connected}
+        />
+      </div>
+      <div className="address-row">
+        {hardware.i2c.map((d) => (
+          <span key={d}>{d}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+function Device({
+  name,
+  value,
+  ok,
+}: {
+  name: string;
+  value: string;
+  ok?: boolean;
+}) {
+  return (
+    <div className="device">
+      <small>{name}</small>
+      <b className={ok ? "ok" : ""}>
+        {ok && <Check size={12} />} {value}
+      </b>
+    </div>
+  );
+}
+function PiTft({ verified, text }: { verified: boolean; text: string }) {
+  return (
+    <div className={"pitft " + (verified ? "bright" : "")}>
+      <div className="tft-head">
+        <span>MINI PiTFT</span>
+        <Power size={12} />
+      </div>
+      <div className="screen">
+        <div className="screen-orb">
+          {verified ? <Check size={23} /> : <CircleDot size={23} />}
+        </div>
+        <b>{text}</b>
+        <small>{verified ? "I²C · 0x39" : "READY TO GUIDE"}</small>
+      </div>
+      <div className="tft-foot">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  );
+}
+export default App;
 
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById("root")!).render(<App />);

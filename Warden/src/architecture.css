@@ -1,3 +1,101 @@
-@media(min-width:821px){
-  .wiring-stage{display:grid;grid-template-columns:1fr .8fr 1fr;align-items:center;gap:12px;padding:42px 16px 28px}.wiring-stage:before{opacity:.12}.trace-svg,.signal-path{display:none}.drawing-label{top:14px;left:16px}.node,.pi-node,.target-node{position:relative;inset:auto;width:auto;min-height:132px;padding:16px;box-shadow:none}.pi-node{background:#15281b;border-color:#4f7656}.target-node{background:#223a19;border-color:#a6ff4d}.node b{font-size:14px;line-height:1.15;margin:14px 0 8px}.node i{font-size:9px}.socket{display:none}.board-pins{left:16px;right:auto;bottom:14px}.sensor-lens{right:14px;top:14px}.cable{position:relative;left:auto;top:auto;transform:none;width:auto;opacity:1!important;animation:none!important}.cable span{height:8px;background:linear-gradient(90deg,#a6ff4d 0 16%,#34583b 16% 84%,#a6ff4d 84%);animation:none}.cable b{font-size:8px;line-height:1.25;margin-top:12px}.cable small{font-size:8px;line-height:1.3}.wiring-stage.awaiting .cable{opacity:.32!important}.wiring-stage.awaiting:after{bottom:14px}.companion-instruction{min-height:295px}.action-items li{font-size:13px}.verify-line{font-size:9px}
+@media (min-width: 821px) {
+  .wiring-stage {
+    display: grid;
+    grid-template-columns: 1fr 0.8fr 1fr;
+    align-items: center;
+    gap: 12px;
+    padding: 42px 16px 28px;
+  }
+  .wiring-stage:before {
+    opacity: 0.12;
+  }
+  .trace-svg,
+  .signal-path {
+    display: none;
+  }
+  .drawing-label {
+    top: 14px;
+    left: 16px;
+  }
+  .node,
+  .pi-node,
+  .target-node {
+    position: relative;
+    inset: auto;
+    width: auto;
+    min-height: 132px;
+    padding: 16px;
+    box-shadow: none;
+  }
+  .pi-node {
+    background: #15281b;
+    border-color: #4f7656;
+  }
+  .target-node {
+    background: #223a19;
+    border-color: #a6ff4d;
+  }
+  .node b {
+    font-size: 14px;
+    line-height: 1.15;
+    margin: 14px 0 8px;
+  }
+  .node i {
+    font-size: 9px;
+  }
+  .socket {
+    display: none;
+  }
+  .board-pins {
+    left: 16px;
+    right: auto;
+    bottom: 14px;
+  }
+  .sensor-lens {
+    right: 14px;
+    top: 14px;
+  }
+  .cable {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    width: auto;
+    opacity: 1 !important;
+    animation: none !important;
+  }
+  .cable span {
+    height: 8px;
+    background: linear-gradient(
+      90deg,
+      #a6ff4d 0 16%,
+      #34583b 16% 84%,
+      #a6ff4d 84%
+    );
+    animation: none;
+  }
+  .cable b {
+    font-size: 8px;
+    line-height: 1.25;
+    margin-top: 12px;
+  }
+  .cable small {
+    font-size: 8px;
+    line-height: 1.3;
+  }
+  .wiring-stage.awaiting .cable {
+    opacity: 0.32 !important;
+  }
+  .wiring-stage.awaiting:after {
+    bottom: 14px;
+  }
+  .companion-instruction {
+    min-height: 295px;
+  }
+  .action-items li {
+    font-size: 13px;
+  }
+  .verify-line {
+    font-size: 9px;
+  }
 }

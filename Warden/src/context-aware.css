@@ -1,1 +1,33 @@
-@media(min-width:821px){.wiring-stage.awaiting .cable,.wiring-stage.awaiting .signal-path{opacity:.18!important;animation:none}.wiring-stage.awaiting .socket{background:#607063;box-shadow:none}.wiring-stage.awaiting .target-node{border-color:#4c5e50;background:linear-gradient(135deg,#233128,#111a14)}.wiring-stage.awaiting .sensor-lens{border-color:#68766c;box-shadow:none}.wiring-stage.awaiting:after{content:"Show the components or name them on your phone";position:absolute;z-index:5;left:50%;bottom:47px;transform:translateX(-50%);white-space:nowrap;color:#b8c9ba;font:10px 'DM Mono';padding:8px 10px;background:#0a120dda;border:1px solid #334238}}
+@media (min-width: 821px) {
+  .wiring-stage.awaiting .cable,
+  .wiring-stage.awaiting .signal-path {
+    opacity: 0.18 !important;
+    animation: none;
+  }
+  .wiring-stage.awaiting .socket {
+    background: #607063;
+    box-shadow: none;
+  }
+  .wiring-stage.awaiting .target-node {
+    border-color: #4c5e50;
+    background: linear-gradient(135deg, #233128, #111a14);
+  }
+  .wiring-stage.awaiting .sensor-lens {
+    border-color: #68766c;
+    box-shadow: none;
+  }
+  .wiring-stage.awaiting:after {
+    content: "Show the components or name them on your phone";
+    position: absolute;
+    z-index: 5;
+    left: 50%;
+    bottom: 47px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    color: #b8c9ba;
+    font: 10px "DM Mono";
+    padding: 8px 10px;
+    background: #0a120dda;
+    border: 1px solid #334238;
+  }
+}
