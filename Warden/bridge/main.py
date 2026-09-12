@@ -38,6 +38,25 @@ class VisionRequest(BaseModel):
     mission: str | None = None
     pi_state: dict[str, Any] = {}
 
+class VoiceDiagnosticEvent(BaseModel):
+    event: str
+    session: str | None = None
+    detail: dict[str, Any] = {}
+
+VOICE_LOG = os.path.join(os.path.dirname(__file__), "logs", "voice-debug.ndjson")
+
+@app.post("/diagnostics/voice")
+def voice_diagnostics(event: VoiceDiagnosticEvent):
+    """Local-only voice trace. Deliberately never accepts keys, URLs, or images."""
+    safe_detail = {key: value for key, value in event.detail.items() if key not in {"signed_url", "image", "token", "api_key"}}
+    os.makedirs(os.path.dirname(VOICE_LOG), exist_ok=True)
+    if os.path.exists(VOICE_LOG) and os.path.getsize(VOICE_LOG) > 5_000_000:
+        os.replace(VOICE_LOG, VOICE_LOG + ".previous")
+    record = {"at": __import__("datetime").datetime.now().astimezone().isoformat(), "event": event.event, "session": event.session, "detail": safe_detail}
+    with open(VOICE_LOG, "a", encoding="utf-8") as log:
+        log.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return {"ok": True}
+
 def local_coach(message: str) -> str:
     text = message.lower()
     if "i2c" in text or "sensor" in text:
