@@ -89,7 +89,13 @@ Only populate actions when Warden gave a concrete physical next action. Read and
         raw = "".join(item.text for item in response.content if item.type == "text").strip()
         raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         parsed = json.loads(raw)
-        return {key: parsed.get(key, fallback[key]) for key in fallback}
+        plan = {key: parsed.get(key, fallback[key]) for key in fallback}
+        for key in ("source", "connector", "target", "verification"):
+            if str(plan[key]).strip().lower() in {"unknown", "none", "n/a", "not identified", "not applicable"}:
+                plan[key] = ""
+        if plan["confidence"] == "waiting":
+            plan["actions"] = []
+        return plan
     except Exception:
         return fallback
 
