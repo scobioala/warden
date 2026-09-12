@@ -2,6 +2,10 @@
 
 **An agentic hardware debugger for the physical world.**
 
+Built by **Cornell Tinkerers** for the **AI Tinkerers — NYC Hackathon**.
+
+**Team:** Cris Nicoglu · Davide Bacchini · Aakarsh Gundu · Viktor Radev
+
 Warden is a camera-aware voice agent for building, inspecting, and debugging real hardware. A learner uses their phone as Warden’s eyes and voice; a laptop becomes a synchronized build surface that renders the next connection and verification step. It is built for robotics, electronics, and hands-on engineering—not as another chat window.
 
 > “I’m Warden, your agentic hardware debugger. What are we building, fixing, or figuring out today?”
