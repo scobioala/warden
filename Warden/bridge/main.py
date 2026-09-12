@@ -33,6 +33,11 @@ class CoachRequest(BaseModel):
     mission: str | None = None
     current_step: str | None = None
 
+class VisionRequest(BaseModel):
+    image: str
+    mission: str | None = None
+    pi_state: dict[str, Any] = {}
+
 def local_coach(message: str) -> str:
     text = message.lower()
     if "i2c" in text or "sensor" in text:
@@ -115,6 +120,24 @@ def coach_stream(request: CoachRequest):
         except Exception:
             yield f"data: {json.dumps({'delta': local_coach(request.message), 'done': True, 'provider': 'local'})}\n\n"
     return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control":"no-cache", "X-Accel-Buffering":"no"})
+
+@app.post("/vision")
+def vision(request: VisionRequest):
+    """Low-rate scene observer for the live voice agent; never claims certainty it does not have."""
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return {"observation": "UNCERTAIN: Vision is not configured on this bridge.", "kind": "uncertain"}
+    try:
+        from anthropic import Anthropic
+        header, pixels = request.image.split(",", 1)
+        prompt = f"""Inspect this beginner electronics workbench frame for the active task: {request.mission or 'general help'}.
+Known safe kit only: Raspberry Pi 5, Mini PiTFT, APDS9960, Qwiic button, Qwiic rotary encoder, Qwiic cables. Pi context: {request.pi_state}.
+Return exactly one short line beginning with OK:, CORRECT:, or UNCERTAIN:. Use CORRECT only for a clearly visible, actionable issue. Never claim a connection is verified by image alone."""
+        response = Anthropic().messages.create(model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), max_tokens=80, system="You are a cautious visual hardware observer.", messages=[{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png" if "image/png" in header else "image/jpeg","data":pixels}},{"type":"text","text":prompt}]}])
+        observation = "".join(item.text for item in response.content if item.type == "text").strip()
+        kind = observation.split(":", 1)[0].lower() if ":" in observation else "uncertain"
+        return {"observation": observation, "kind": kind}
+    except Exception:
+        return {"observation": "UNCERTAIN: I need a clearer, well-lit view of one component.", "kind": "uncertain"}
 
 @app.post("/demo/{event}")
 def demo(event: str):
