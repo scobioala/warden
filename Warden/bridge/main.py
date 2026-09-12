@@ -24,7 +24,7 @@ load_local_env()
 app = FastAPI(title="Warden Pi Bridge")
 app.add_middleware(CORSMiddleware, allow_origins=[os.getenv("WARDEN_WEB_ORIGIN", "http://localhost:5173")], allow_methods=["*"], allow_headers=["*"])
 state = {"mode": os.getenv("WARDEN_MODE", "mock"), "online": True, "i2c": ["0x3C · Mini PiTFT", "0x6E · Qwiic Button", "0x36 · Rotary Encoder"], "apds9960": {"detected": False, "address": "0x39", "gesture": "waiting", "proximity": 0}, "button": {"pressed": False, "led": "off"}, "encoder": {"position": 0}, "pitft": "WARDEN READY"}
-companion_state = {"instruction": "Show Warden the workbench to begin a shared build.", "updated_at": None}
+companion_state = {"instruction": "", "source": "", "connector": "", "target": "", "actions": [], "verification": "", "confidence": "waiting", "updated_at": None}
 SYSTEM = """You are Warden, a calm, camera-aware engineering companion. Start general and friendly; do not assume a Raspberry Pi. Once the learner states a goal, guide one safe physical action at a time. If camera_live is false, ask them to open it and show the relevant part before physical instructions. Treat supplied camera observations as evidence, but never claim certainty that the evidence does not support. When an observation begins GUESS:, say the likely item in plain words and ask: 'Is that right?' Do not ask for a clearer view unless there is genuinely too little to make a useful hypothesis. After the learner confirms, propose the single logical next action and its verification signal. The Pi state is mock/demo state unless explicitly marked real. Speak like a helpful person beside the learner: no markdown, no emojis, maximum two short sentences or 35 words. Help with low-voltage hobby hardware only. Never provide mains, battery-pack, high-current, unsafe, or unverified wiring instructions. Every hardware action must have one verification signal."""
 
 class CoachRequest(BaseModel):
@@ -46,6 +46,7 @@ class VoiceDiagnosticEvent(BaseModel):
 
 class CompanionUpdate(BaseModel):
     instruction: str
+    observation: str | None = None
 
 VOICE_LOG = os.path.join(os.path.dirname(__file__), "logs", "voice-debug.ndjson")
 
@@ -66,9 +67,31 @@ def companion(): return companion_state
 
 @app.post("/companion")
 def update_companion(update: CompanionUpdate):
-    if len(update.instruction.strip()) >= 20:
-        companion_state.update(instruction=update.instruction.strip()[:500], updated_at=__import__("datetime").datetime.now().astimezone().isoformat())
+    instruction = update.instruction.strip()[:700]
+    if len(instruction) >= 12:
+        plan = companion_plan(instruction, update.observation)
+        companion_state.update(plan, instruction=instruction, updated_at=__import__("datetime").datetime.now().astimezone().isoformat())
     return companion_state
+
+def companion_plan(instruction: str, observation: str | None) -> dict[str, Any]:
+    """Turn the spoken turn plus visual evidence into a compact laptop plan."""
+    fallback = {"source": "", "connector": "", "target": "", "actions": [], "verification": "", "confidence": "waiting"}
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return fallback
+    try:
+        from anthropic import Anthropic
+        prompt = f"""Create the laptop companion plan for a safe, low-voltage hardware task.
+Warden's latest spoken reply: {instruction}
+Latest camera observation: {observation or 'none'}
+Return JSON only with exactly these fields: source (string), connector (string), target (string), actions (array of 0 to 3 concise imperative steps), verification (string), confidence (one of waiting, tentative, confirmed).
+Only populate actions when Warden gave a concrete physical next action. Read and preserve any clearly legible label, pin name, address, number, or code from the observation. Do not invent component names, connector types, pinouts, or verification. If evidence is insufficient, use confidence waiting or tentative and an empty actions array. Never provide mains, high-current, or unsafe wiring guidance."""
+        response = Anthropic().messages.create(model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), max_tokens=300, system="You convert real-world hardware context into cautious structured plans.", messages=[{"role":"user", "content":prompt}])
+        raw = "".join(item.text for item in response.content if item.type == "text").strip()
+        raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        parsed = json.loads(raw)
+        return {key: parsed.get(key, fallback[key]) for key in fallback}
+    except Exception:
+        return fallback
 
 def local_coach(message: str) -> str:
     text = message.lower()
@@ -166,8 +189,8 @@ def vision(request: VisionRequest):
         header, pixels = request.image.split(",", 1)
         prompt = f"""Inspect this electronics workbench frame for the active task: {request.mission or 'general help'}.
 Likely kit: Raspberry Pi 5, Mini PiTFT, APDS9960, Qwiic button, Qwiic rotary encoder, Qwiic cables. Pi context: {request.pi_state}.
-Return exactly one short line. Prefer GUESS: followed by the most likely visible item(s) and one observable detail, even if not fully certain. Use OK: only for a clearly correct visible state. Use CORRECT: only for a clearly visible, actionable issue. Use UNCERTAIN: only when no useful item hypothesis is possible. Never claim an electrical connection is verified by image alone."""
-        response = Anthropic().messages.create(model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), max_tokens=80, system="You are a cautious visual hardware observer.", messages=[{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png" if "image/png" in header else "image/jpeg","data":pixels}},{"type":"text","text":prompt}]}])
+Read any legible labels, pin names, I2C addresses, part numbers, printed codes, screen values, and connector markings exactly as seen; do not guess unreadable text. Return exactly one short line. Prefer GUESS: followed by the most likely visible item(s), any legible identifier, and one observable detail. Use OK: only for a clearly correct visible state. Use CORRECT: only for a clearly visible, actionable issue. Use UNCERTAIN: only when no useful item hypothesis is possible. Never claim an electrical connection is verified by image alone."""
+        response = Anthropic().messages.create(model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), max_tokens=140, system="You are a cautious visual hardware observer with OCR attention.", messages=[{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png" if "image/png" in header else "image/jpeg","data":pixels}},{"type":"text","text":prompt}]}])
         observation = "".join(item.text for item in response.content if item.type == "text").strip()
         kind = observation.split(":", 1)[0].lower() if ":" in observation else "uncertain"
         return {"observation": observation, "kind": kind}
