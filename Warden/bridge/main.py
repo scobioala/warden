@@ -68,10 +68,10 @@ def elevenlabs_session():
     if not api_key or not agent_id:
         return {"error": "ElevenLabs is not configured"}
     try:
-        url = "https://api.elevenlabs.io/v1/convai/conversation/token?" + urlencode({"agent_id": agent_id})
+        url = "https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?" + urlencode({"agent_id": agent_id})
         req = Request(url, headers={"xi-api-key": api_key})
         with urlopen(req, timeout=15) as response:
-            return {"conversation_token": json.loads(response.read())["token"], "agent_id": agent_id}
+            return {"signed_url": json.loads(response.read())["signed_url"], "agent_id": agent_id}
     except Exception:
         return {"error": "Could not start the voice agent"}
 
