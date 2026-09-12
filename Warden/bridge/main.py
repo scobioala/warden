@@ -24,7 +24,7 @@ load_local_env()
 app = FastAPI(title="Warden Pi Bridge")
 app.add_middleware(CORSMiddleware, allow_origins=[os.getenv("WARDEN_WEB_ORIGIN", "http://localhost:5173")], allow_methods=["*"], allow_headers=["*"])
 state = {"mode": os.getenv("WARDEN_MODE", "mock"), "online": True, "i2c": ["0x3C · Mini PiTFT", "0x6E · Qwiic Button", "0x36 · Rotary Encoder"], "apds9960": {"detected": False, "address": "0x39", "gesture": "waiting", "proximity": 0}, "button": {"pressed": False, "led": "off"}, "encoder": {"position": 0}, "pitft": "WARDEN READY"}
-SYSTEM = """You are Warden, a calm, natural voice companion at a Raspberry Pi workbench. Start general and friendly: if the learner greets you or asks if you can hear them, answer naturally and ask, 'How can I help you today?' Do not force a build mission from a greeting. Once they state a goal such as assembling or building something, guide one safe physical action at a time. If camera_live is false, first tell them to open the camera and show the relevant part; do not give a physical placement instruction before that view. If a camera frame is present and it is clear, say what you can actually see, then tell them the next action. Never claim to see a component without an image. The Pi state is mock/demo state unless explicitly marked real: say it is a simulated console, not a physical observation. Speak like a helpful person beside the learner, not a chatbot or manual. Use short spoken sentences, no markdown, no emojis, and never more than three sentences. Help with low-voltage hobby hardware only. Never provide mains, battery-pack, high-current, unsafe, or unverified wiring instructions. If camera recognition is uncertain, ask for one specific view adjustment. Every hardware action must have one verification signal."""
+SYSTEM = """You are Warden, a calm, camera-aware engineering companion. Start general and friendly; do not assume a Raspberry Pi. Once the learner states a goal, guide one safe physical action at a time. If camera_live is false, ask them to open it and show the relevant part before physical instructions. Treat supplied camera observations as evidence, but never claim certainty that the evidence does not support. When an observation begins GUESS:, say the likely item in plain words and ask: 'Is that right?' Do not ask for a clearer view unless there is genuinely too little to make a useful hypothesis. After the learner confirms, propose the single logical next action and its verification signal. The Pi state is mock/demo state unless explicitly marked real. Speak like a helpful person beside the learner: no markdown, no emojis, maximum two short sentences or 35 words. Help with low-voltage hobby hardware only. Never provide mains, battery-pack, high-current, unsafe, or unverified wiring instructions. Every hardware action must have one verification signal."""
 
 class CoachRequest(BaseModel):
     message: str
@@ -129,15 +129,15 @@ def vision(request: VisionRequest):
     try:
         from anthropic import Anthropic
         header, pixels = request.image.split(",", 1)
-        prompt = f"""Inspect this beginner electronics workbench frame for the active task: {request.mission or 'general help'}.
-Known safe kit only: Raspberry Pi 5, Mini PiTFT, APDS9960, Qwiic button, Qwiic rotary encoder, Qwiic cables. Pi context: {request.pi_state}.
-Return exactly one short line beginning with OK:, CORRECT:, or UNCERTAIN:. Use CORRECT only for a clearly visible, actionable issue. Never claim a connection is verified by image alone."""
+        prompt = f"""Inspect this electronics workbench frame for the active task: {request.mission or 'general help'}.
+Likely kit: Raspberry Pi 5, Mini PiTFT, APDS9960, Qwiic button, Qwiic rotary encoder, Qwiic cables. Pi context: {request.pi_state}.
+Return exactly one short line. Prefer GUESS: followed by the most likely visible item(s) and one observable detail, even if not fully certain. Use OK: only for a clearly correct visible state. Use CORRECT: only for a clearly visible, actionable issue. Use UNCERTAIN: only when no useful item hypothesis is possible. Never claim an electrical connection is verified by image alone."""
         response = Anthropic().messages.create(model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), max_tokens=80, system="You are a cautious visual hardware observer.", messages=[{"role":"user","content":[{"type":"image","source":{"type":"base64","media_type":"image/png" if "image/png" in header else "image/jpeg","data":pixels}},{"type":"text","text":prompt}]}])
         observation = "".join(item.text for item in response.content if item.type == "text").strip()
         kind = observation.split(":", 1)[0].lower() if ":" in observation else "uncertain"
         return {"observation": observation, "kind": kind}
     except Exception:
-        return {"observation": "UNCERTAIN: I need a clearer, well-lit view of one component.", "kind": "uncertain"}
+        return {"observation": "UNCERTAIN: I could not form a useful visual hypothesis from this frame.", "kind": "uncertain"}
 
 @app.post("/demo/{event}")
 def demo(event: str):
