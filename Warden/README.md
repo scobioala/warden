@@ -1,52 +1,101 @@
-# Warden · embodied AI tutor
+# Warden
 
-Warden is a general workbench companion for the Raspberry Pi 5 and a known low-voltage Qwiic kit. It listens to spoken questions, inspects an explicitly captured browser camera frame, guides one physical action at a time, and confirms state through a Pi bridge. The APDS9960 sequence is a demo lesson—not the product’s only workflow. It deliberately never gives mains-power or unverified wiring advice.
+**An agentic hardware debugger for the physical world.**
 
-## Run the demo (no Pi required)
+Warden is a camera-aware voice agent for building, inspecting, and debugging real hardware. A learner uses their phone as Warden’s eyes and voice; a laptop becomes a synchronized build surface that renders the next connection and verification step. It is built for robotics, electronics, and hands-on engineering—not as another chat window.
+
+> “I’m Warden, your agentic hardware debugger. What are we building, fixing, or figuring out today?”
+
+## The product loop
+
+1. **See** — Warden inspects opt-in browser camera frames for components, labels, pin names, addresses, screen values, and printed codes.
+2. **Reason** — it makes a calibrated identification, asks for confirmation when evidence is partial, and proposes one safe next action.
+3. **Show** — the laptop companion turns the current turn into a source → connector → target architecture and concise action steps.
+4. **Verify** — the Pi bridge reports real or simulated hardware state. Warden calls a connection verified only when evidence supports it.
+
+## Run it
+
+From this directory:
 
 ```bash
-cd Warden
 npm install
 npm run dev
 ```
 
-Open the printed local URL. Click **Run demo** for a deterministic one-click walkthrough, or use **Start guided setup**. Camera access is optional; when recognition is uncertain, the interface asks the learner to adjust the view instead of claiming a detection.
-
-## Pi bridge
-
-On the Raspberry Pi, with the supported I²C/Qwiic hardware connected:
+In a second terminal:
 
 ```bash
-cd Warden/bridge
-python -m venv .venv && source .venv/bin/activate
+cd bridge
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8787
+uvicorn main:app --host 127.0.0.1 --port 8787
 ```
 
-The bridge serves `GET /health`, `GET /status`, a status WebSocket at `/ws`, and mock demo hooks at `POST /demo/connect`, `/demo/wave`, and `/demo/confirm`. `WARDEN_MODE=mock` is the default. The real-hardware adapter is intentionally isolated in `bridge/main.py`; add CircuitPython/Blinka initialization there for the APDS9960, Qwiic Button, rotary encoder, and PiTFT.
+Open `http://127.0.0.1:5173` on a laptop. For a phone demo, expose the Vite server with an HTTPS tunnel and open its public URL on the phone.
 
-Environment variables: `WARDEN_MODE=mock|real`, `WARDEN_WEB_ORIGIN=http://localhost:5173`, `VITE_WARDEN_BRIDGE_URL=http://<pi>:8787`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and optional `ANTHROPIC_MODEL`. See `bridge/.env.example`; do not commit a populated `.env` file.
+1. Tap **Talk to Warden** and allow microphone access.
+2. Say: “I’m building with my Raspberry Pi. I want to show you what I have.”
+3. Open the camera when Warden asks and show the workbench.
+4. Keep the laptop open: the shared build surface updates from the same voice turn with the current action and verification signal.
 
-### Astra, voice, and vision
+Use **Run demo** for a deterministic Pi/Qwiic walkthrough with no physical hardware.
 
-Set `OPENAI_API_KEY` on the bridge to activate Astra via the Responses API using `gpt-6-astra`. If that key is absent or Astra fails, Warden uses `ANTHROPIC_API_KEY` with Claude Sonnet 4.6; both providers can reason over the user-triggered JPEG camera frame and the live Pi state. When neither works, Warden clearly labels and uses its deterministic safe fallback rather than pretending it performed vision or reasoning. Browser speech recognition transcribes the learner’s question; browser text-to-speech speaks Warden’s response. Microphone and camera permissions are requested only after the learner presses the relevant control.
+## What is real vs. simulated
 
-## Architecture
+| Capability | Live mode | Mock mode |
+| --- | --- | --- |
+| Phone microphone and ElevenLabs agent | Real | Real |
+| Browser camera and camera-frame analysis | Real, opt-in | Real, opt-in |
+| Reading legible labels/codes | Model-assisted | Model-assisted |
+| Laptop build architecture | Generated from current voice + vision context | Same flow |
+| Pi bridge / I²C values | Connected Pi adapter when configured | Deterministic simulated state |
+| APDS9960 / button / encoder / PiTFT walkthrough | Hardware-dependent | One-click deterministic walkthrough |
 
-```text
-Browser camera + voice/text UI  →  React workbench experience
-                                       ↕ HTTP / WebSocket
-                              Python Pi bridge → I²C devices / PiTFT
+Warden never represents mock I²C state as a physical observation.
+
+## Configuration
+
+```bash
+cp bridge/.env.example bridge/.env
 ```
 
-The browser owns camera permissions and spoken prompts (with an accessible text-control fallback). The Pi owns I²C truth. Mock mode preserves that exact event model so a demo never depends on physical hardware.
+Required for live voice:
 
-## 90-second demo script
+```bash
+ELEVENLABS_API_KEY=
+ELEVENLABS_AGENT_ID=
+```
 
-1. Open Warden: “What are we building today?” establishes a camera-aware workbench rather than a chat window.
-2. Say “Warden, help me connect my first sensor,” or press **Start guided setup**.
-3. Warden asks to see the APDS9960 and Qwiic cable, then gives one safe, keyed low-voltage connection action.
-4. Press **I made the connection**. The console discovers `0x39`, the PiTFT changes to **VERIFIED**, and the button LED reports green.
-5. Warden says: “Verified. You connected your first I²C sensor.”
-6. Continue: a wave gesture advances the lesson; the encoder and Qwiic button select and confirm the next lesson.
-7. For a reliable stage run, press **Run demo** and let the full sequence play itself.
+Recommended for camera understanding and laptop-plan generation:
+
+```bash
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-4-6
+```
+
+Optional primary reasoning provider:
+
+```bash
+OPENAI_API_KEY=
+```
+
+`bridge/.env` is ignored by Git. Never commit, screenshot, or paste credentials into source files.
+
+## Safety
+
+Warden supports low-voltage learning and workbench tasks. It does **not** instruct mains power, live high-voltage systems, hazardous chemicals, gas, high-current battery packs, or other tasks that need a qualified professional. Visual uncertainty is stated plainly; Warden does not fabricate component IDs, codes, wiring, or verification.
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [90-second demo script](docs/DEMO.md)
+
+## Before presenting
+
+```bash
+npm run build
+curl http://127.0.0.1:8787/health
+```
+
+Refresh the laptop and phone pages, start a fresh voice session, and ensure the laptop companion is neutral before the first camera confirmation.
