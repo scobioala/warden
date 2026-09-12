@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import FastAPI, WebSocket
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -76,9 +76,12 @@ def elevenlabs_session():
         url = "https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?" + urlencode({"agent_id": agent_id})
         req = Request(url, headers={"xi-api-key": api_key})
         with urlopen(req, timeout=15) as response:
-            return {"signed_url": json.loads(response.read())["signed_url"], "agent_id": agent_id}
+            return JSONResponse(
+                {"signed_url": json.loads(response.read())["signed_url"], "agent_id": agent_id},
+                headers={"Cache-Control": "no-store, max-age=0"},
+            )
     except Exception:
-        return {"error": "Could not start the voice agent"}
+        return JSONResponse({"error": "Could not start the voice agent"}, headers={"Cache-Control": "no-store, max-age=0"})
 
 @app.get("/health")
 def health(): return {"ok": True, "mode": state["mode"]}
