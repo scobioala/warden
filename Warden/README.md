@@ -6,6 +6,10 @@ Warden is a camera-aware voice agent for building, inspecting, and debugging rea
 
 > “I’m Warden, your agentic hardware debugger. What are we building, fixing, or figuring out today?”
 
+![Warden’s live companion surface](docs/assets/warden-live-companion.png)
+
+_The laptop companion stays intentionally sparse: camera context on the left, and the current source → connector → target action on the right._
+
 ## The product loop
 
 1. **See** — Warden inspects opt-in browser camera frames for components, labels, pin names, addresses, screen values, and printed codes.
@@ -54,6 +58,20 @@ Use **Run demo** for a deterministic Pi/Qwiic walkthrough with no physical hardw
 
 Warden never represents mock I²C state as a physical observation.
 
+## How AI is used
+
+Warden uses AI to turn a physical, spoken problem into a cautious next action—not to pretend it can see or verify everything.
+
+- **ElevenLabs Conversational AI** provides the low-latency, interrupt-resistant voice conversation. The browser receives a short-lived session URL; the API key stays on the bridge.
+- **Vision + OCR reasoning** uses Claude when configured. User-approved camera frames are inspected for visible components, labels, pin names, I²C addresses, screen values, and printed codes. Warden states a likely identification and asks for confirmation when the view is partial; it never invents unreadable text or claims an electrical connection from an image alone.
+- **OpenAI Astra** is the preferred coaching provider for text and optional image-aware reasoning. **OpenRouter** is a live OpenAI-compatible fallback path, allowing the team to choose a suitable model without changing the client. Claude remains a secondary vision-capable provider, followed by a deterministic local-safe fallback.
+- **Exa** powers the bridge’s optional `/research` capability for source discovery: datasheets, pinouts, manuals, and component documentation. It is deliberately separate from the fast voice loop, so retrieval never blocks an immediate physical instruction.
+- **Structured planning** converts the current spoken response and visual observation into a compact JSON plan—source, connector, target, up to three action steps, and one verification signal—which drives the laptop companion.
+
+### AI-assisted development
+
+OpenAI Codex was used as an engineering copilot to implement and iterate on the product: the React/TypeScript interface, FastAPI bridge, provider routing, safety constraints, camera/voice handoffs, documentation, and test/build checks. It did not replace product judgment: the safety policy, demo flow, and claims about real versus simulated hardware are explicit in the codebase.
+
 ## Configuration
 
 ```bash
@@ -79,6 +97,16 @@ Optional primary reasoning provider:
 ```bash
 OPENAI_API_KEY=
 ```
+
+Optional provider routing and documentation research:
+
+```bash
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-4.1-mini
+EXA_API_KEY=
+```
+
+Routing order for `/coach` is OpenAI Astra → OpenRouter → Anthropic → local safe fallback. The Exa endpoint is available at `POST /research` and returns a small, source-oriented result set only when `EXA_API_KEY` is configured.
 
 `bridge/.env` is ignored by Git. Never commit, screenshot, or paste credentials into source files.
 

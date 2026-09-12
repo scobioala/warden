@@ -48,6 +48,9 @@ class CompanionUpdate(BaseModel):
     instruction: str
     observation: str | None = None
 
+class ResearchRequest(BaseModel):
+    query: str
+
 VOICE_LOG = os.path.join(os.path.dirname(__file__), "logs", "voice-debug.ndjson")
 
 @app.post("/diagnostics/voice")
@@ -118,6 +121,29 @@ def anthropic_coach(request: CoachRequest) -> str:
     response = Anthropic().messages.create(model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), max_tokens=350, system=SYSTEM, messages=[{"role": "user", "content": content}])
     return "".join(block.text for block in response.content if block.type == "text")
 
+def openrouter_coach(request: CoachRequest) -> str:
+    """OpenAI-compatible secondary router; keys remain on the local bridge."""
+    model = os.getenv("OPENROUTER_MODEL", "openai/gpt-4.1-mini")
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"Learner asks: {request.message}\nBuild mission: {request.mission or 'none'}\nCurrent instruction: {request.current_step or 'none'}\nPi state: {state}\nBrowser state: {request.hardware}"}],
+        "max_tokens": 220,
+    }
+    if request.image:
+        payload["messages"][1]["content"] = [
+            {"type": "text", "text": payload["messages"][1]["content"]},
+            {"type": "image_url", "image_url": {"url": request.image, "detail": "low"}},
+        ]
+    req = Request(
+        "https://openrouter.ai/api/v1/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}", "Content-Type": "application/json", "HTTP-Referer": os.getenv("WARDEN_PUBLIC_URL", "http://localhost:5173"), "X-Title": "Warden"},
+        method="POST",
+    )
+    with urlopen(req, timeout=25) as response:
+        result = json.loads(response.read())
+    return result["choices"][0]["message"]["content"]
+
 def anthropic_content(request: CoachRequest) -> list[dict[str, Any]]:
     content: list[dict[str, Any]] = [{"type": "text", "text": f"Learner asks: {request.message}\nBuild mission: {request.mission or 'none'}\nCurrent instruction: {request.current_step or 'none'}\nPi state: {state}\nBrowser state: {request.hardware}"}]
     if request.image:
@@ -162,12 +188,35 @@ def coach(request: CoachRequest):
             return {"answer": response.output_text, "model": "gpt-6-astra", "provider": "openai", "vision": bool(request.image)}
         except Exception:
             pass  # Continue to the configured secondary provider.
+    if os.getenv("OPENROUTER_API_KEY"):
+        try:
+            return {"answer": openrouter_coach(request), "model": os.getenv("OPENROUTER_MODEL", "openai/gpt-4.1-mini"), "provider": "openrouter", "vision": bool(request.image)}
+        except Exception:
+            pass  # Continue to the configured secondary provider.
     if os.getenv("ANTHROPIC_API_KEY"):
         try:
             return {"answer": anthropic_coach(request), "model": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6"), "provider": "anthropic", "vision": bool(request.image)}
         except Exception:
             pass
     return {"answer": local_coach(request.message), "model": "local-safe-fallback", "provider": "local", "vision": bool(request.image)}
+
+@app.post("/research")
+def research(request: ResearchRequest):
+    """Optional Exa-backed source discovery for manuals, pinouts, and component datasheets."""
+    if not os.getenv("EXA_API_KEY"):
+        return {"configured": False, "results": []}
+    safe_query = request.query.strip()[:300]
+    if not safe_query:
+        return {"configured": True, "results": []}
+    try:
+        body = json.dumps({"query": safe_query, "numResults": 4, "contents": {"highlights": {"maxCharacters": 500}}}).encode()
+        exa_request = Request("https://api.exa.ai/search", data=body, headers={"x-api-key": os.environ["EXA_API_KEY"], "Content-Type": "application/json"}, method="POST")
+        with urlopen(exa_request, timeout=15) as response:
+            raw_results = json.loads(response.read()).get("results", [])
+        results = [{"title": item.get("title", "Untitled"), "url": item.get("url", ""), "highlights": item.get("highlights", [])[:2]} for item in raw_results]
+        return {"configured": True, "results": results}
+    except Exception:
+        return {"configured": True, "results": []}
 
 @app.post("/coach/stream")
 def coach_stream(request: CoachRequest):
