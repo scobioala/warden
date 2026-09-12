@@ -24,6 +24,7 @@ load_local_env()
 app = FastAPI(title="Warden Pi Bridge")
 app.add_middleware(CORSMiddleware, allow_origins=[os.getenv("WARDEN_WEB_ORIGIN", "http://localhost:5173")], allow_methods=["*"], allow_headers=["*"])
 state = {"mode": os.getenv("WARDEN_MODE", "mock"), "online": True, "i2c": ["0x3C · Mini PiTFT", "0x6E · Qwiic Button", "0x36 · Rotary Encoder"], "apds9960": {"detected": False, "address": "0x39", "gesture": "waiting", "proximity": 0}, "button": {"pressed": False, "led": "off"}, "encoder": {"position": 0}, "pitft": "WARDEN READY"}
+companion_state = {"instruction": "Show Warden the workbench to begin a shared build.", "updated_at": None}
 SYSTEM = """You are Warden, a calm, camera-aware engineering companion. Start general and friendly; do not assume a Raspberry Pi. Once the learner states a goal, guide one safe physical action at a time. If camera_live is false, ask them to open it and show the relevant part before physical instructions. Treat supplied camera observations as evidence, but never claim certainty that the evidence does not support. When an observation begins GUESS:, say the likely item in plain words and ask: 'Is that right?' Do not ask for a clearer view unless there is genuinely too little to make a useful hypothesis. After the learner confirms, propose the single logical next action and its verification signal. The Pi state is mock/demo state unless explicitly marked real. Speak like a helpful person beside the learner: no markdown, no emojis, maximum two short sentences or 35 words. Help with low-voltage hobby hardware only. Never provide mains, battery-pack, high-current, unsafe, or unverified wiring instructions. Every hardware action must have one verification signal."""
 
 class CoachRequest(BaseModel):
@@ -43,6 +44,9 @@ class VoiceDiagnosticEvent(BaseModel):
     session: str | None = None
     detail: dict[str, Any] = {}
 
+class CompanionUpdate(BaseModel):
+    instruction: str
+
 VOICE_LOG = os.path.join(os.path.dirname(__file__), "logs", "voice-debug.ndjson")
 
 @app.post("/diagnostics/voice")
@@ -56,6 +60,15 @@ def voice_diagnostics(event: VoiceDiagnosticEvent):
     with open(VOICE_LOG, "a", encoding="utf-8") as log:
         log.write(json.dumps(record, ensure_ascii=False) + "\n")
     return {"ok": True}
+
+@app.get("/companion")
+def companion(): return companion_state
+
+@app.post("/companion")
+def update_companion(update: CompanionUpdate):
+    if len(update.instruction.strip()) >= 20:
+        companion_state.update(instruction=update.instruction.strip()[:500], updated_at=__import__("datetime").datetime.now().astimezone().isoformat())
+    return companion_state
 
 def local_coach(message: str) -> str:
     text = message.lower()
